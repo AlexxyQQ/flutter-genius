@@ -1,7 +1,12 @@
 {
   "name": "dart-entity-model-generator",
-  "displayName": "dart-entity-model-generator",
-  "description": "",
+  "displayName": "Dart Entity Model Generator",
+  "description": "A helper extension that generates feature folder for your feature-driven Flutter project.",
+  "author": {
+    "name": "Aayush Pandey",
+    "url": "https://github.com/alexxyqq",
+    "email": "aayushpandey616+dartEntityModelGenerator@gmail.com"
+  },
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.87.0"

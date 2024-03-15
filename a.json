@@ -1,0 +1,51 @@
+{
+  "products": [
+    {
+      "name": "Laptop Pro 17",
+      "id": 101,
+      "price": 1299.99,
+      "quantity": null,
+      "categories": ["electronics", "computers"],
+      "is_available": true
+    },
+    {
+      "name": "Smartphone Ultra",
+      "id": 102,
+      "price": 999.99,
+      "categories": ["electronics", "phones"],
+      "is_available": true
+    },
+    {
+      "name": "Bluetooth Headphones",
+      "id": 103,
+      "price": 199.99,
+      "quantity": 75,
+      "categories": ["electronics", "audio"],
+      "is_available": false
+    },
+    {
+      "name": "Electric Toothbrush Advanced",
+      "id": 104,
+      "quantity": 120,
+      "categories": ["home", "health"],
+      "is_available": true
+    },
+    {
+      "name": "Gaming Console X",
+      "id": 105,
+      "price": 499.99,
+      "quantity": 45,
+      "categories": ["electronics", "gaming"],
+      "is_available": false
+    }
+  ],
+  "car": [
+    {
+      "model": null,
+      "car_name": 101,
+      "price": 1299.99,
+      "quantity": 35,
+      "is_available": true
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import { writeToGeneratedFile } from "./write-to-generated-file";
 
 // Main function to create the feature structure.
 export function createFeatureStructure(basePath: string, featureName: string) {
@@ -37,22 +38,22 @@ function getInitialStructure(
   // Define the base structure object with predefined directories and files.
   let structure: any = {
     domain: {
-      entity: ["test_entity.dart"],
-      usecase: ["get_all_test_usecase.dart"],
-      repository: ["test_repository.dart"],
+      entity: [`${featureName}_entity.dart`],
+      usecase: [`get_all_${featureName}_usecase.dart`],
+      repository: [`${featureName}_repository.dart`],
     },
     data: {
       data_source: {
         local: {}, // Placeholder for local data sources; initially empty.
-        remote: ["test_remote_data_source.dart"], // Predefined remote data source.
+        remote: [`${featureName}_remote_data_source.dart`], // Predefined remote data source.
       },
       model: {}, // Placeholder for models; initially empty.
-      repository: ["test_repository_impl.dart"], // Predefined repository implementation.
+      repository: [`${featureName}_repository_impl.dart`], // Predefined repository implementation.
     },
     presentation: {
-      cubit: ["test_state.dart", "test_cubit.dart"], // Predefined state and cubit files for Cubit state management.
-      view: ["test_view.dart"], // Predefined view file.
-      widget: {}, // Placeholder for widgets; initially empty.
+      cubit: [`${featureName}_state.dart`, `${featureName}_cubit.dart`], // Predefined state and cubit files for Cubit state management.
+      view: [`${featureName}_view.dart`], // Predefined view file.
+      widget: {},
     },
   };
 
@@ -72,8 +73,10 @@ function getInitialStructure(
   }
 
   // Basic local data source and model files are always included.
-  structure.data.data_source.local[""] = ["test_local_data_source.dart"];
-  structure.data.model[""] = ["test_model.dart"];
+  structure.data.data_source.local[""] = [
+    `${featureName}_local_data_source.dart`,
+  ];
+  structure.data.model[""] = [`${featureName}_model.dart`];
 
   return structure;
 }
@@ -100,9 +103,8 @@ function generateStructure(
     // If contents is an array, it's a list of files to create in this directory.
     if (Array.isArray(contents)) {
       contents.forEach((file) => {
-        // Construct the full path for the file and write a basic template.
         const filePath = path.join(dirPath, file);
-        fs.writeFileSync(filePath, "// your code here\n");
+        writeToGeneratedFile(filePath, file, featureName);
       });
     } else {
       // If not an array, it's a subdirectory with its own structure, so call generateStructure recursively.
@@ -111,34 +113,3 @@ function generateStructure(
   });
 }
 
-export function createAddFeatureCommand() {
-  let addFeatureCommand = vscode.commands.registerCommand(
-    "dart-entity-model-generator.addFeature",
-    async (uri: vscode.Uri) => {
-      // Extract the folder name from the URI
-      const folderName = path.basename(uri.fsPath);
-
-      // Check if the folder name is 'feature'
-      if (folderName.toLowerCase() === "feature") {
-        const featureName = await vscode.window.showInputBox({
-          prompt: "What is the name of the feature?",
-        });
-        if (!featureName) {
-          vscode.window.showErrorMessage("Feature name cannot be empty!");
-          return;
-        }
-
-        createFeatureStructure(uri.fsPath, featureName);
-        vscode.window.showInformationMessage(
-          `Feature '${featureName}' has been created successfully in ${folderName}!`
-        );
-      } else {
-        vscode.window.showErrorMessage(
-          "This command can only be executed on a directory named 'feature'."
-        );
-      }
-    }
-  );
-
-  return addFeatureCommand;
-}

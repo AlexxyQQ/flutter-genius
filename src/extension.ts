@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { createAddFeatureCommand } from "./command/feature-strecture-generator";
+import { createAddFeatureCommand } from "./command/add-feature-command";
 
 export function activate(context: vscode.ExtensionContext) {
   var addFeature = createAddFeatureCommand();
