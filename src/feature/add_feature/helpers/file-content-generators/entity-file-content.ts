@@ -1,5 +1,5 @@
-import { toCamelCase } from "../utils/camel-case";
-import { toPascalCase } from "../utils/pascal-case";
+import { toCamelCase } from "../../../../utils/camel-case";
+import { toPascalCase } from "../../../../utils/pascal-case";
 
 export function entityFileContent(featureName: string) {
   return `

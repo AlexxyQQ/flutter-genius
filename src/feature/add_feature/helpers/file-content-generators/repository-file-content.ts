@@ -1,4 +1,4 @@
-import { toPascalCase } from "../utils/pascal-case";
+import { toPascalCase } from "../../../../utils/pascal-case";
 
 export function repositoryFileContent(featureName: string, abstract: boolean) {
   if (abstract) {

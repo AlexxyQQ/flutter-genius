@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { createFeatureStructure } from "./feature-structure-generator";
-export function createAddFeatureCommand() {
+export function registerAddFeatureCommand() {
   let addFeatureCommand = vscode.commands.registerCommand(
     "dart-entity-model-generator.addFeature",
     async (uri: vscode.Uri) => {
@@ -9,7 +9,7 @@ export function createAddFeatureCommand() {
       const folderName = path.basename(uri.fsPath);
 
       // Check if the folder name is 'feature'
-      if (folderName.toLowerCase() === "feature") {
+      if (folderName.toLowerCase() === "features") {
         const featureName = await vscode.window.showInputBox({
           prompt: "What is the name of the feature?",
         });
@@ -24,7 +24,7 @@ export function createAddFeatureCommand() {
         );
       } else {
         vscode.window.showErrorMessage(
-          "This command can only be executed on a directory named 'feature'."
+          "This command can only be executed on a directory named 'features'."
         );
       }
     }

@@ -43,6 +43,10 @@
       {
         "command": "dart-entity-model-generator.addFeature",
         "title": "Add Feature"
+      },
+      {
+        "command": "dart-entity-model-generator.createCleanCodeFolderStructure",
+        "title": "Create Clean Code Folder Structure"
       }
     ],
     "menus": {
