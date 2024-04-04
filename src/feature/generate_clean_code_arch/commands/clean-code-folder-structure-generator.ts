@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { writeToGeneratedFile } from "../../add_feature/commands/write-to-generated-file";
+import { writeToGeneratedFile } from "../../../utils/write-to-generated-file";
 
 // Main function to create the structure.
 export function createCleanCodeFeatureStructure(basePath: string) {
@@ -16,7 +16,6 @@ export function createCleanCodeFeatureStructure(basePath: string) {
           },
           hive: { "hive_table_constants.dart": "" },
           images: { "image_path_constants.dart": "" },
-          text: { "all_text_styles_constants.dart": "" },
         },
         routes: { "routes.dart": "" },
       },

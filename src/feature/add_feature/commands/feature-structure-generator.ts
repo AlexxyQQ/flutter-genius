@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { writeToGeneratedFile } from "./write-to-generated-file";
+import { writeToGeneratedFile } from "../../../utils/write-to-generated-file";
 
 // Main function to create the feature structure.
 export function createFeatureStructure(basePath: string, featureName: string) {
@@ -112,4 +112,3 @@ function generateStructure(
     }
   });
 }
-
