@@ -3,7 +3,7 @@ import * as path from "path";
 import { createFeatureStructure } from "./feature-structure-generator";
 export function registerAddFeatureCommand() {
   let addFeatureCommand = vscode.commands.registerCommand(
-    "dart-entity-model-generator.addFeature",
+    "flutter-genius.addFeature",
     async (uri: vscode.Uri) => {
       // Extract the folder name from the URI
       const folderName = path.basename(uri.fsPath);

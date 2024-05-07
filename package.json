@@ -1,16 +1,16 @@
 {
-  "name": "dart-entity-model-generator",
-  "displayName": "Dart Entity Model Generator",
-  "description": "A helper extension that generates feature folder for your feature-driven Flutter project.",
+  "name": "flutter-genius",
+  "displayName": "FlutterGenius",
+  "description": "FlutterGenius: Streamline your Flutter development with automated folder structures, feature generation, and JSON to Dart class conversion.",
   "publisher": "alexxy",
   "author": {
     "name": "Aayush Pandey",
     "url": "https://github.com/alexxyqq",
-    "email": "aayushpandey616+dartEntityModelGenerator@gmail.com"
+    "email": "aayushpandey616+flutterGenius@gmail.com"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/AlexxyQQ/dart-entity-model-generator"
+    "url": "https://github.com/AlexxyQQ/flutter-genius"
   },
   "version": "0.0.1",
   "engines": {
@@ -41,18 +41,18 @@
   "contributes": {
     "commands": [
       {
-        "command": "dart-entity-model-generator.addFeature",
+        "command": "flutter-genius.addFeature",
         "title": "Add Feature"
       },
       {
-        "command": "dart-entity-model-generator.createCleanCodeFolderStructure",
+        "command": "flutter-genius.createCleanCodeFolderStructure",
         "title": "Create Clean Code Folder Structure"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "command": "dart-entity-model-generator.addFeature",
+          "command": "flutter-genius.addFeature",
           "group": "navigation@10",
           "when": "explorerResourceIsFolder == true"
         }
@@ -61,17 +61,17 @@
     "configuration": {
       "title": "Dart Entity Model Generator",
       "properties": {
-        "dartEntityModelGenerator.createHive": {
+        "flutterGenius.createHive": {
           "type": "boolean",
           "default": true,
           "description": "Enable to automatically create Hive-related files."
         },
-        "dartEntityModelGenerator.createInjectionContainer": {
+        "flutterGenius.createInjectionContainer": {
           "type": "boolean",
           "default": true,
           "description": "Enable to automatically create an injection container."
         },
-        "dartEntityModelGenerator.useStateManagement": {
+        "flutterGenius.useStateManagement": {
           "type": "string",
           "default": "Cubit",
           "enum": [

@@ -6,7 +6,7 @@ import { writeToGeneratedFile } from "../../../utils/write-to-generated-file";
 // Main function to create the feature structure.
 export function createFeatureStructure(basePath: string, featureName: string) {
   // Access configuration settings specific to this extension.
-  const config = vscode.workspace.getConfiguration("dartEntityModelGenerator");
+  const config = vscode.workspace.getConfiguration("flutterGenius");
 
   // Retrieve settings from configuration; default to true if not set.
   const createHive = config.get<boolean>("createHive", true);

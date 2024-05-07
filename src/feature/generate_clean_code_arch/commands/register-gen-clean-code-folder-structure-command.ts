@@ -5,7 +5,7 @@ import { createCleanCodeFeatureStructure } from "./clean-code-folder-structure-g
 export function createGenerateCleanCodeFolderStructureCommand() {
   let registerCreateCleanCodeFolderStructureCommand =
     vscode.commands.registerCommand(
-      "dart-entity-model-generator.createCleanCodeFolderStructure",
+      "flutter-genius.createCleanCodeFolderStructure",
       async (uri: vscode.Uri) => {
         if (vscode.workspace.workspaceFolders) {
           var libPath = getLibPath([...vscode.workspace.workspaceFolders]);
