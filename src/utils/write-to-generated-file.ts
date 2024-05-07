@@ -19,6 +19,30 @@ import { primitiveColorConstantDart } from "../feature/generate_clean_code_arch/
 import { semanticsConstantDart } from "../feature/generate_clean_code_arch/helpers/file-content-generators/config/constants/colors/semantics_constant.dart";
 import localeStateDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/bloc/locale/locale_state.dart";
 import localeCubitDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/bloc/locale/locale_cubit.dart";
+import loaderDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/loader.dart";
+import noPageRouteDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/no_page_route.dart";
+import customButtonDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/custom_widgets/custom_button.dart";
+import customTextFormDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/custom_widgets/custom_text_form.dart";
+import customSnackbarDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/custom_widgets/custom_snackbar.dart";
+import settingHiveServiceDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/hive/hive_service/setting_hive_service.dart";
+import appSettingsHiveModelDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/hive/app_settings_hive_model.dart";
+import DioErrorInterceptorDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/connections/api/dio_error_interceptor.dart";
+import hiveServiceDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/connections/hive/hive_service.dart";
+import FailureDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/failure/error_handler.dart";
+import intlEnArbTs from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/localization/l10n/intl_en.arb";
+import navigationServiceDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/services/navigation_service.dart";
+import snackbarServiceDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/services/snackbar_service.dart";
+import allTextStylesDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/themes/text_themes/all_text_styles.dart";
+import textThemesDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/themes/text_themes/text_themes.dart";
+import appThemeDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/themes/app_theme.dart";
+import useCaseDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/useCase/usecase.dart";
+import allTextThemeExtensionDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/utils/extensions/all_text_theme_extension.dart";
+import appTextThemeExtensionDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/utils/extensions/app_text_theme_extension.dart";
+import connectivityCheckDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/utils/connectivity_check.dart";
+import languageSelectorBottomSheetDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/utils/language_selector_bottom_sheet.dart";
+import mainDiDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/di/main_di.dart";
+import exportsDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/exports.dart";
+import apiDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/connections/api/api.dart";
 
 export function writeToGeneratedFile(
   path: string,
@@ -107,6 +131,122 @@ export function writeToGeneratedFile(
     case "locale_cubit.dart":
       fileContent = localeCubitDart();
       break;
+    // --Common
+    // ---Loader
+    case "loader.dart":
+      fileContent = loaderDart();
+      break;
+    // ---No Page View
+    case "no_page_view.dart":
+      fileContent = noPageRouteDart();
+      break;
+    // ---Export
+    case "exports.dart":
+      fileContent = exportsDart();
+      break;
+    // --Custom Widgets
+    // ----Custom Button
+    case "custom_button.dart":
+      fileContent = customButtonDart();
+      break;
+    // ----Custom Text Field
+    case "custom_text_field.dart":
+      fileContent = customTextFormDart();
+      break;
+    // ----Custom Snackbar
+    case "custom_snackbar.dart":
+      fileContent = customSnackbarDart();
+      break;
+    // ---Hive
+    // ----Hive Service
+    // -----Settings Hive Model
+    case "app_settings_hive_model.dart":
+      fileContent = appSettingsHiveModelDart();
+      break;
+    // ------Settings Hive Service
+    case "settings_hive_service.dart":
+      fileContent = settingHiveServiceDart();
+      break;
+    // --Connections
+    // ---API
+    // ----Dio Service
+    case "dio_service.dart":
+      fileContent = apiDart();
+      break;
+    // ----Dio Error Interceptor
+    case "dio_error_interceptor.dart":
+      fileContent = DioErrorInterceptorDart();
+      break;
+    // ---Hive
+    // ----Hive Service
+    case "hive_service.dart":
+      fileContent = hiveServiceDart();
+      break;
+    // --Failure
+    // ---Error Handler
+    case "error_handler.dart":
+      fileContent = FailureDart();
+      break;
+    // -Localization
+    // --L10n
+    // ---intl_en.arb
+    case "intl_en.arb":
+      fileContent = intlEnArbTs();
+      break;
+    // -Services
+    // --Navigation Service
+    case "navigation_service.dart":
+      fileContent = navigationServiceDart();
+      break;
+    // --Snackbar Service
+    case "snackbar_service.dart":
+      fileContent = snackbarServiceDart();
+      break;
+    // -Themes
+    // --Text Theme
+    // ---All Text Styles
+    case "all_text_styles.dart":
+      fileContent = allTextStylesDart();
+      break;
+    // ---Default Text Styles
+    case "default_text_styles.dart":
+      fileContent = textThemesDart();
+      break;
+    // --App Theme
+    case "app_theme.dart":
+      fileContent = appThemeDart();
+      break;
+    // -Usecase
+    // --Usecase
+    case "usecase.dart":
+      fileContent = useCaseDart();
+      break;
+    // -Utils
+    // --Extensions
+    // ---All Text Style Extension
+    case "all_text_style_extension.dart":
+      fileContent = allTextThemeExtensionDart();
+      break;
+    // ---App Text Style Extension
+    case "app_text_style_extension.dart":
+      fileContent = appTextThemeExtensionDart();
+      break;
+    // --Connectivity Check
+    case "connectivity_check.dart":
+      fileContent = connectivityCheckDart();
+      break;
+    // --Language Selector Bottom Sheet
+    case "language_selector_bottom_sheet.dart":
+      fileContent = languageSelectorBottomSheetDart();
+      break;
+    // Features
+
+    // DI
+    // -Main DI
+    case "main_di.dart":
+      fileContent = mainDiDart();
+      break;
+
     default:
       fileContent = "//! Your file content here.";
       break;

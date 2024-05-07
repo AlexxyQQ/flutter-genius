@@ -28,7 +28,7 @@ export function createCleanCodeFeatureStructure(basePath: string) {
         common: {
           "loader.dart": "",
           "no_page_view.dart": "",
-          "export.dart": "",
+          "exports.dart": "",
           custom_widgets: {
             "custom_button.dart": "",
             "custom_text_field.dart": "",
@@ -45,11 +45,15 @@ export function createCleanCodeFeatureStructure(basePath: string) {
           api: { "dio_service.dart": "", "dio_error_interceptor.dart": "" },
           hive: { "hive_service.dart": "" },
         },
-        failure: { "failure.dart": "" },
+        failure: { "error_handler.dart": "" },
         localization: {
           l10n: {
             "intl_en.arb": "",
           },
+        },
+        services: {
+          "navigation_service.dart": "",
+          "snackbar_service.dart": "",
         },
         themes: {
           text_theme: {
@@ -63,13 +67,9 @@ export function createCleanCodeFeatureStructure(basePath: string) {
           extensions: {
             "all_text_style_extension.dart": "",
             "app_text_style_extension.dart": "",
-            "titlecase_extension.dart": "",
-          },
-          services: {
-            "navigation_service.dart": "",
-            "snackbar_service.dart": "",
           },
           "connectivity_check.dart": "",
+          "language_selector_bottom_sheet.dart": "",
         },
         "app.dart": "",
       },
