@@ -72,7 +72,7 @@ export class ConvertJsonToDart {
     }
   }
 
-  getType(value: any): string {
+  getType(value: any, key: string): string {
     if (value === null || value === undefined) {
       return "dynamic";
     } else if (typeof value === "string") {
@@ -83,28 +83,29 @@ export class ConvertJsonToDart {
       return "bool";
     } else if (Array.isArray(value)) {
       if (value.length > 0 && typeof value[0] === "object") {
-        return `List<${capitalizeFirstLetter(toCamelCase(typeof value[0]))}>`;
+        return `List<${capitalizeFirstLetter(toCamelCase(key))}>`;
       } else {
         return "List<dynamic>";
       }
     } else if (typeof value === "object") {
-      return capitalizeFirstLetter(toCamelCase(typeof value));
+      return capitalizeFirstLetter(toCamelCase(key));
     } else {
       return "dynamic";
     }
   }
 
   generateEntityPropertyDeclaration(key: string, value: any): string {
-    const type = this.getType(value);
+    const type = this.getType(value, `${key}Entity`);
     const camelCaseKey = toCamelCase(key);
     return `  final ${type}? ${camelCaseKey};\n`;
   }
+
   generateHivePropertyDeclaration(
     index: number,
     key: string,
     value: any
   ): string {
-    const type = this.getType(value);
+    const type = this.getType(value, `${key}HiveModel`);
     const camelCaseKey = toCamelCase(key);
     return `  
     @HiveField(${index})
@@ -120,6 +121,7 @@ export class ConvertJsonToDart {
     constructorString += "  });\n";
     return constructorString;
   }
+
   generateModelConstructor(className: string, properties: JsonObject): string {
     let constructorString = `${className}Model({\n`;
     for (const [key, _] of Object.entries(properties)) {
@@ -129,6 +131,7 @@ export class ConvertJsonToDart {
     constructorString += "  });\n";
     return constructorString;
   }
+
   generateHiveConstructor(className: string, properties: JsonObject): string {
     let constructorString = `${className}HiveModel({\n`;
     for (const [key, _] of Object.entries(properties)) {
@@ -150,6 +153,22 @@ export class ConvertJsonToDart {
       capitalizeFirstLetter(className),
       properties
     );
+
+    classString += this.generateEntityCopyWithMethod(className, properties);
+
+    classString += this.generateToStringMethod(
+      `${capitalizeFirstLetter(className)}Entity`,
+      properties
+    );
+
+    classString += this.generateToMapMethod(properties);
+
+    classString += this.generateEntityFromMapMethod(
+      `${capitalizeFirstLetter(className)}Entity`,
+      properties,
+      "Entity"
+    );
+
     classString += "}\n\n";
 
     return classString;
@@ -163,6 +182,19 @@ export class ConvertJsonToDart {
     classString += this.generateModelConstructor(
       capitalizeFirstLetter(className),
       properties
+    );
+
+    classString += this.generateToStringMethod(
+      `${capitalizeFirstLetter(className)}Model`,
+      properties
+    );
+
+    classString += this.generateToMapMethod(properties);
+
+    classString += this.generateEntityFromMapMethod(
+      `${capitalizeFirstLetter(className)}Model`,
+      properties,
+      "Model"
     );
 
     classString += "}\n\n";
@@ -190,9 +222,173 @@ export class ConvertJsonToDart {
       capitalizeFirstLetter(className),
       properties
     );
+
+    classString += this.generateHiveCopyWithMethod(className, properties);
+
+    classString += this.generateToStringMethod(
+      `${capitalizeFirstLetter(className)}HiveModel`,
+      properties
+    );
+
+    classString += this.generateToMapMethod(properties);
+
+    classString += this.generateEntityFromMapMethod(
+      `${capitalizeFirstLetter(className)}HiveModel`,
+      properties,
+      "HiveModel"
+    );
+
     classString += "}\n\n";
 
     return classString;
+  }
+
+  generateEntityCopyWithMethod(
+    className: string,
+    properties: JsonObject
+  ): string {
+    let methodString = `  ${capitalizeFirstLetter(
+      className
+    )}Entity copyWith({\n`;
+
+    for (const [key, value] of Object.entries(properties)) {
+      const type = this.getType(value, `${key}Entity`);
+      const camelCaseKey = toCamelCase(key);
+      methodString += `    ${type}? ${camelCaseKey},\n`;
+    }
+
+    methodString += "  }) {\n";
+    methodString += `    return ${capitalizeFirstLetter(className)}Entity(\n`;
+
+    for (const [key, _] of Object.entries(properties)) {
+      const camelCaseKey = toCamelCase(key);
+      methodString += `      ${camelCaseKey}: ${camelCaseKey} ?? this.${camelCaseKey},\n`;
+    }
+
+    methodString += "    );\n";
+    methodString += "  }\n";
+
+    return methodString;
+  }
+
+  generateHiveCopyWithMethod(
+    className: string,
+    properties: JsonObject
+  ): string {
+    let methodString = `  ${capitalizeFirstLetter(
+      className
+    )}HiveModel copyWith({\n`;
+
+    for (const [key, value] of Object.entries(properties)) {
+      const type = this.getType(value, `${key}HiveModel`);
+      const camelCaseKey = toCamelCase(key);
+      methodString += `    ${type}? ${camelCaseKey},\n`;
+    }
+
+    methodString += "  }) {\n";
+    methodString += `    return ${capitalizeFirstLetter(
+      className
+    )}HiveModel(\n`;
+
+    for (const [key, _] of Object.entries(properties)) {
+      const camelCaseKey = toCamelCase(key);
+      methodString += `      ${camelCaseKey}: ${camelCaseKey} ?? this.${camelCaseKey},\n`;
+    }
+
+    methodString += "    );\n";
+    methodString += "  }\n";
+
+    return methodString;
+  }
+
+  generateToStringMethod(className: string, properties: JsonObject): string {
+    let methodString = "  @override\n";
+    methodString += "  String toString() {\n";
+    methodString += `    return '${className} {`;
+    for (const [key, _] of Object.entries(properties)) {
+      const camelCaseKey = toCamelCase(key);
+      methodString += `"${camelCaseKey}": $${camelCaseKey}, `;
+    }
+    methodString += "}';\n";
+    methodString += "  }\n";
+
+    return methodString;
+  }
+
+  generateToMapMethod(properties: JsonObject) {
+    let methodString = "  Map<String, dynamic> toMap() {\n";
+    methodString += "    return {\n";
+    for (const [key, values] of Object.entries(properties)) {
+      const snakeCaseKey = toSnakeCase(key);
+      const camelCaseKey = toCamelCase(key);
+
+      if (values === null || values === undefined) {
+        methodString += `      '${snakeCaseKey}': ${camelCaseKey},\n`;
+      } else if (typeof values === "string") {
+        methodString += `      '${snakeCaseKey}': ${camelCaseKey},\n`;
+      } else if (typeof values === "number") {
+        methodString += `      '${snakeCaseKey}': ${camelCaseKey},\n`;
+      } else if (typeof values === "boolean") {
+        methodString += `      '${snakeCaseKey}': ${camelCaseKey},\n`;
+      } else if (Array.isArray(values)) {
+        if (values.length > 0 && typeof values[0] === "object") {
+          methodString += `      '${snakeCaseKey}': ${camelCaseKey}?.map((e) => e.toMap()).toList(),\n`;
+        } else {
+          methodString += `      '${snakeCaseKey}': ${camelCaseKey},\n`;
+        }
+      } else if (typeof values === "object") {
+        methodString += `      '${snakeCaseKey}': ${camelCaseKey}?.toMap(),\n`;
+      } else {
+        methodString += `      '${snakeCaseKey}': ${camelCaseKey},\n`;
+      }
+    }
+    methodString += "    };\n";
+    methodString += "  }\n";
+
+    return methodString;
+  }
+
+  generateEntityFromMapMethod(
+    className: string,
+    properties: JsonObject,
+    type: string = "Entity"
+  ) {
+    let methodString = `  factory ${className}.fromMap(Map<String, dynamic> map) {\n`;
+    methodString += `    return ${className}(\n`;
+
+    for (const [key, values] of Object.entries(properties)) {
+      const snakeCaseKey = toSnakeCase(key);
+      const camelCaseKey = toCamelCase(key);
+
+      if (values === null || values === undefined) {
+        methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
+      } else if (typeof values === "string") {
+        methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
+      } else if (typeof values === "number") {
+        methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
+      } else if (typeof values === "boolean") {
+        methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
+      } else if (Array.isArray(values)) {
+        if (values.length > 0 && typeof values[0] === "object") {
+          methodString += `      ${camelCaseKey}: map['${snakeCaseKey}']?.map((e) => ${capitalizeFirstLetter(
+            toCamelCase(key)
+          )}${type}.fromMap(e))?.toList(),\n`;
+        } else {
+          methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
+        }
+      } else if (typeof values === "object") {
+        methodString += `      ${camelCaseKey}: ${capitalizeFirstLetter(
+          toCamelCase(key)
+        )}${type}.fromMap(map['${snakeCaseKey}']),\n`;
+      } else {
+        methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
+      }
+    }
+
+    methodString += "    );\n";
+    methodString += "  }\n";
+
+    return methodString;
   }
 
   convert(mainClassName: string, folderPath: string): void {
