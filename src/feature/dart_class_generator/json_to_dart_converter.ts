@@ -1,6 +1,9 @@
 import * as fs from "fs";
 import * as path from "path";
 import { toSnakeCase } from "../../utils/snake-case";
+import { capitalizeFirstLetter } from "../../utils/capitalize_first_letter";
+import { toCamelCase } from "../../utils/camel-case";
+import { readSetting } from "../../utils/read-settings";
 
 class JsonObject {
   [key: string]: any;
@@ -15,29 +18,58 @@ export class ConvertJsonToDart {
     this.classes = [];
   }
 
-  separateNestedClass(jsonObj: JsonObject, prefix: string = ""): void {
+  separateNestedClass(
+    jsonObj: JsonObject,
+    prefix: string = "",
+    processed: Map<JsonObject, string> = new Map()
+  ): void {
+    // Check if the current object has already been processed
+    if (processed.has(jsonObj)) {
+      return;
+    }
+
+    // Add the current object to the processed map
+    processed.set(jsonObj, prefix);
+
     for (const [key, value] of Object.entries(jsonObj)) {
-      if (typeof value === "object" && value !== null) {
-        const nestedClassName = this.capitalizeFirstLetter(
-          this.toCamelCase(key)
-        );
-        this.separateNestedClass(value, nestedClassName);
+      if (
+        Array.isArray(value) &&
+        value.length > 0 &&
+        typeof value[0] === "object"
+      ) {
+        // If the property is an array containing objects, process only the first object
+        const nestedClassName = capitalizeFirstLetter(toCamelCase(key));
+        this.separateNestedClass(value[0], nestedClassName, processed);
+      } else if (typeof value === "object" && value !== null) {
+        // For non-array objects, process them normally
+        const nestedClassName = capitalizeFirstLetter(toCamelCase(key));
+        this.separateNestedClass(value, nestedClassName, processed);
       }
     }
+
     const className = prefix || "Main"; // If prefix is empty, use 'Main' as class name
-    console.log(`APPPPP:${className}`);
     this.classes.push({
-      className,
-      content: this.generateClassString(className, jsonObj),
+      className: `${className}Entity`,
+      content: this.generateEntityClassString(className, jsonObj),
     });
-  }
-
-  capitalizeFirstLetter(str: string): string {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  }
-
-  toCamelCase(str: string): string {
-    return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    // Check settings for enabling Hive
+    var createModelEnabled = readSetting(
+      "json.createModelForJSONToDartConvert"
+    );
+    console.log("createModelEnabled", createModelEnabled);
+    if (createModelEnabled) {
+      this.classes.push({
+        className: `models/${className}Model`,
+        content: this.generateModelClassString(className, jsonObj),
+      });
+    }
+    var createHiveEnabled = readSetting("json.createHiveForJSONToDartConvert");
+    if (createHiveEnabled) {
+      this.classes.push({
+        className: `hive_models/${className}HiveModel`,
+        content: this.generateHiveClassString(className, jsonObj),
+      });
+    }
   }
 
   getType(value: any): string {
@@ -51,43 +83,113 @@ export class ConvertJsonToDart {
       return "bool";
     } else if (Array.isArray(value)) {
       if (value.length > 0 && typeof value[0] === "object") {
-        return `List<${this.capitalizeFirstLetter(
-          this.toCamelCase(typeof value[0])
-        )}>`;
+        return `List<${capitalizeFirstLetter(toCamelCase(typeof value[0]))}>`;
       } else {
         return "List<dynamic>";
       }
     } else if (typeof value === "object") {
-      return this.capitalizeFirstLetter(this.toCamelCase(typeof value));
+      return capitalizeFirstLetter(toCamelCase(typeof value));
     } else {
       return "dynamic";
     }
   }
 
-  generatePropertyDeclaration(key: string, value: any): string {
+  generateEntityPropertyDeclaration(key: string, value: any): string {
     const type = this.getType(value);
-    const camelCaseKey = this.toCamelCase(key);
+    const camelCaseKey = toCamelCase(key);
     return `  final ${type}? ${camelCaseKey};\n`;
   }
+  generateHivePropertyDeclaration(
+    index: number,
+    key: string,
+    value: any
+  ): string {
+    const type = this.getType(value);
+    const camelCaseKey = toCamelCase(key);
+    return `  
+    @HiveField(${index})
+    final ${type}? ${camelCaseKey};\n`;
+  }
 
-  generateConstructor(className: string, properties: JsonObject): string {
-    let constructorString = `${className}({\n`;
+  generateEntityConstructor(className: string, properties: JsonObject): string {
+    let constructorString = `${className}Entity({\n`;
     for (const [key, _] of Object.entries(properties)) {
-      const camelCaseKey = this.toCamelCase(key);
+      const camelCaseKey = toCamelCase(key);
+      constructorString += `    this.${camelCaseKey},\n`;
+    }
+    constructorString += "  });\n";
+    return constructorString;
+  }
+  generateModelConstructor(className: string, properties: JsonObject): string {
+    let constructorString = `${className}Model({\n`;
+    for (const [key, _] of Object.entries(properties)) {
+      const camelCaseKey = toCamelCase(key);
+      constructorString += `    super.${camelCaseKey},\n`;
+    }
+    constructorString += "  });\n";
+    return constructorString;
+  }
+  generateHiveConstructor(className: string, properties: JsonObject): string {
+    let constructorString = `${className}HiveModel({\n`;
+    for (const [key, _] of Object.entries(properties)) {
+      const camelCaseKey = toCamelCase(key);
       constructorString += `    this.${camelCaseKey},\n`;
     }
     constructorString += "  });\n";
     return constructorString;
   }
 
-  generateClassString(className: string, properties: JsonObject): string {
-    let classString = `class ${this.capitalizeFirstLetter(className)} {\n`;
+  generateEntityClassString(className: string, properties: JsonObject): string {
+    let classString = `class ${capitalizeFirstLetter(className)}Entity {\n`;
 
     for (const [key, value] of Object.entries(properties)) {
-      classString += this.generatePropertyDeclaration(key, value);
+      classString += this.generateEntityPropertyDeclaration(key, value);
     }
 
-    classString += this.generateConstructor(className, properties);
+    classString += this.generateEntityConstructor(
+      capitalizeFirstLetter(className),
+      properties
+    );
+    classString += "}\n\n";
+
+    return classString;
+  }
+
+  generateModelClassString(className: string, properties: JsonObject): string {
+    let classString = `class ${capitalizeFirstLetter(
+      className
+    )}Model extends ${capitalizeFirstLetter(className)}Entity{\n`;
+
+    classString += this.generateModelConstructor(
+      capitalizeFirstLetter(className),
+      properties
+    );
+
+    classString += "}\n\n";
+
+    return classString;
+  }
+
+  generateHiveClassString(className: string, properties: JsonObject): string {
+    let classString = `
+    import 'package:hive_flutter/hive_flutter.dart';
+
+    part '${toSnakeCase(className)}_hive_model.g.dart';
+
+    @HiveType(
+      typeId: 0, // Change this to a unique number
+    )
+    class ${capitalizeFirstLetter(className)}HiveModel {\n`;
+
+    for (const [key, value] of Object.entries(properties)) {
+      var index = Object.keys(properties).indexOf(key);
+      classString += this.generateHivePropertyDeclaration(index, key, value);
+    }
+
+    classString += this.generateHiveConstructor(
+      capitalizeFirstLetter(className),
+      properties
+    );
     classString += "}\n\n";
 
     return classString;
@@ -98,6 +200,13 @@ export class ConvertJsonToDart {
     this.separateNestedClass(jsonObj, mainClassName);
     this.classes.forEach(({ className, content }) => {
       const filePath = path.join(folderPath, `${toSnakeCase(className)}.dart`);
+      const folder = path.dirname(filePath);
+
+      // Create folder if it doesn't exist
+      if (!fs.existsSync(folder)) {
+        fs.mkdirSync(folder, { recursive: true });
+      }
+
       fs.writeFileSync(filePath, content);
       console.log(`${className} class has been created at ${filePath}.`);
     });

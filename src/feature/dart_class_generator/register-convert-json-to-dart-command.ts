@@ -37,8 +37,9 @@ export function convertJsonToDartCommand() {
           vscode.window.showInformationMessage(
             "Dart classes generated successfully."
           );
-        } catch (error) {
-          vscode.window.showErrorMessage("Selected text is not valid JSON.");
+        } catch (error: any) {
+          console.log(`errorFound: ${error}`);
+          vscode.window.showErrorMessage(error);
         }
       }
     );

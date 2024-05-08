@@ -63,27 +63,17 @@
       ]
     },
     "configuration": {
-      "title": "Dart Entity Model Generator",
+      "title": "FlutterGenius JSON to Dart Configuration",
       "properties": {
-        "flutterGenius.createHive": {
+        "flutterGenius.json.createHiveForJSONToDartConvert": {
           "type": "boolean",
-          "default": true,
-          "description": "Enable to automatically create Hive-related files."
+          "default": false,
+          "description": "Enable to automatically create hive class for the class generated from JSON."
         },
-        "flutterGenius.createInjectionContainer": {
+        "flutterGenius.json.createModelForJSONToDartConvert": {
           "type": "boolean",
-          "default": true,
-          "description": "Enable to automatically create an injection container."
-        },
-        "flutterGenius.useStateManagement": {
-          "type": "string",
-          "default": "Cubit",
-          "enum": [
-            "Cubit",
-            "Bloc",
-            "Riverpod"
-          ],
-          "description": "Select the state management method to be used."
+          "default": false,
+          "description": "Enable to automatically create model class for the class generated from JSON."
         }
       }
     }
