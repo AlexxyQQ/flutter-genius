@@ -47,6 +47,10 @@
       {
         "command": "flutter-genius.createCleanCodeFolderStructure",
         "title": "Create Clean Code Folder Structure"
+      },
+      {
+        "command": "flutter-genius.convertJsonToDart",
+        "title": "Convert JSON to Dart"
       }
     ],
     "menus": {
