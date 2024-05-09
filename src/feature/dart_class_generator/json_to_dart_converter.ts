@@ -149,12 +149,22 @@ export class ConvertJsonToDart {
   }
 
   generateEntityClassString(className: string, properties: JsonObject): string {
+    // imports
     let classString = `
     import 'dart:convert';
+    import 'package:flutter/foundation.dart';
+    `;
 
-import 'package:flutter/foundation.dart';
+    for (const [key, value] of Object.entries(properties)) {
+      if (typeof value === "object" && value !== null) {
+        const nestedClassName = capitalizeFirstLetter(toCamelCase(key));
+        classString += `import '${toSnakeCase(
+          nestedClassName
+        )}_entity.dart';\n`;
+      }
+    }
 
-
+    classString += `
     class ${capitalizeFirstLetter(className)}Entity {\n`;
 
     for (const [key, value] of Object.entries(properties)) {
@@ -199,7 +209,16 @@ import 'package:flutter/foundation.dart';
   }
 
   generateModelClassString(className: string, properties: JsonObject): string {
-    let classString = `class ${capitalizeFirstLetter(
+    let classString = `import '../${toSnakeCase(className)}_entity.dart';\n`;
+
+    for (const [key, value] of Object.entries(properties)) {
+      if (typeof value === "object" && value !== null) {
+        const nestedClassName = capitalizeFirstLetter(toCamelCase(key));
+        classString += `import '${toSnakeCase(nestedClassName)}_model.dart';\n`;
+      }
+    }
+
+    classString += `class ${capitalizeFirstLetter(
       className
     )}Model extends ${capitalizeFirstLetter(className)}Entity{\n`;
 
@@ -227,15 +246,24 @@ import 'package:flutter/foundation.dart';
   }
 
   generateHiveClassString(className: string, properties: JsonObject): string {
+    // imports
     let classString = `
-
     import 'dart:convert';
-
-import 'package:flutter/foundation.dart';
+    import 'package:flutter/foundation.dart';
     import 'package:hive_flutter/hive_flutter.dart';
-
+    
     part '${toSnakeCase(className)}_hive_model.g.dart';
+    `;
 
+    for (const [key, value] of Object.entries(properties)) {
+      if (typeof value === "object" && value !== null) {
+        const nestedClassName = capitalizeFirstLetter(toCamelCase(key));
+        classString += `import '${toSnakeCase(
+          nestedClassName
+        )}_hive_model.dart';\n`;
+      }
+    }
+    classString += `
     @HiveType(
       typeId: 0, // Change this to a unique number
     )
