@@ -78,6 +78,12 @@ export class ConvertJsonToDart {
     } else if (typeof value === "string") {
       return "String";
     } else if (typeof value === "number") {
+      // if the value is an integer
+      if (Number.isInteger(value)) {
+        return "int";
+      } else if (value % 1 !== 0) {
+        return "double";
+      }
       return "int";
     } else if (typeof value === "boolean") {
       return "bool";
@@ -143,7 +149,13 @@ export class ConvertJsonToDart {
   }
 
   generateEntityClassString(className: string, properties: JsonObject): string {
-    let classString = `class ${capitalizeFirstLetter(className)}Entity {\n`;
+    let classString = `
+    import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+
+
+    class ${capitalizeFirstLetter(className)}Entity {\n`;
 
     for (const [key, value] of Object.entries(properties)) {
       classString += this.generateEntityPropertyDeclaration(key, value);
@@ -154,7 +166,7 @@ export class ConvertJsonToDart {
       properties
     );
 
-    classString += this.generateEntityCopyWithMethod(className, properties);
+    classString += this.generateCopyWithMethod(className, properties, "Entity");
 
     classString += this.generateToStringMethod(
       `${capitalizeFirstLetter(className)}Entity`,
@@ -163,7 +175,19 @@ export class ConvertJsonToDart {
 
     classString += this.generateToMapMethod(properties);
 
-    classString += this.generateEntityFromMapMethod(
+    classString += this.generateFromMapMethod(
+      `${capitalizeFirstLetter(className)}Entity`,
+      properties,
+      "Entity"
+    );
+
+    classString += this.generateToJsonFromJsonMethod(
+      `${capitalizeFirstLetter(className)}Entity`,
+      properties,
+      "Entity"
+    );
+
+    classString += this.generateEqualityMethod(
       `${capitalizeFirstLetter(className)}Entity`,
       properties,
       "Entity"
@@ -191,7 +215,7 @@ export class ConvertJsonToDart {
 
     classString += this.generateToMapMethod(properties);
 
-    classString += this.generateEntityFromMapMethod(
+    classString += this.generateFromMapMethod(
       `${capitalizeFirstLetter(className)}Model`,
       properties,
       "Model"
@@ -204,6 +228,10 @@ export class ConvertJsonToDart {
 
   generateHiveClassString(className: string, properties: JsonObject): string {
     let classString = `
+
+    import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
     import 'package:hive_flutter/hive_flutter.dart';
 
     part '${toSnakeCase(className)}_hive_model.g.dart';
@@ -223,7 +251,11 @@ export class ConvertJsonToDart {
       properties
     );
 
-    classString += this.generateHiveCopyWithMethod(className, properties);
+    classString += this.generateCopyWithMethod(
+      className,
+      properties,
+      "HiveModel"
+    );
 
     classString += this.generateToStringMethod(
       `${capitalizeFirstLetter(className)}HiveModel`,
@@ -232,7 +264,19 @@ export class ConvertJsonToDart {
 
     classString += this.generateToMapMethod(properties);
 
-    classString += this.generateEntityFromMapMethod(
+    classString += this.generateFromMapMethod(
+      `${capitalizeFirstLetter(className)}HiveModel`,
+      properties,
+      "HiveModel"
+    );
+
+    classString += this.generateToJsonFromJsonMethod(
+      `${capitalizeFirstLetter(className)}HiveModel`,
+      properties,
+      "HiveModel"
+    );
+
+    classString += this.generateEqualityMethod(
       `${capitalizeFirstLetter(className)}HiveModel`,
       properties,
       "HiveModel"
@@ -243,44 +287,17 @@ export class ConvertJsonToDart {
     return classString;
   }
 
-  generateEntityCopyWithMethod(
+  generateCopyWithMethod(
     className: string,
-    properties: JsonObject
+    properties: JsonObject,
+    modelType: string = "Entity"
   ): string {
     let methodString = `  ${capitalizeFirstLetter(
       className
-    )}Entity copyWith({\n`;
+    )}${modelType} copyWith({\n`;
 
     for (const [key, value] of Object.entries(properties)) {
-      const type = this.getType(value, `${key}Entity`);
-      const camelCaseKey = toCamelCase(key);
-      methodString += `    ${type}? ${camelCaseKey},\n`;
-    }
-
-    methodString += "  }) {\n";
-    methodString += `    return ${capitalizeFirstLetter(className)}Entity(\n`;
-
-    for (const [key, _] of Object.entries(properties)) {
-      const camelCaseKey = toCamelCase(key);
-      methodString += `      ${camelCaseKey}: ${camelCaseKey} ?? this.${camelCaseKey},\n`;
-    }
-
-    methodString += "    );\n";
-    methodString += "  }\n";
-
-    return methodString;
-  }
-
-  generateHiveCopyWithMethod(
-    className: string,
-    properties: JsonObject
-  ): string {
-    let methodString = `  ${capitalizeFirstLetter(
-      className
-    )}HiveModel copyWith({\n`;
-
-    for (const [key, value] of Object.entries(properties)) {
-      const type = this.getType(value, `${key}HiveModel`);
+      const type = this.getType(value, `${key}${modelType}`);
       const camelCaseKey = toCamelCase(key);
       methodString += `    ${type}? ${camelCaseKey},\n`;
     }
@@ -288,7 +305,7 @@ export class ConvertJsonToDart {
     methodString += "  }) {\n";
     methodString += `    return ${capitalizeFirstLetter(
       className
-    )}HiveModel(\n`;
+    )}${modelType}(\n`;
 
     for (const [key, _] of Object.entries(properties)) {
       const camelCaseKey = toCamelCase(key);
@@ -348,7 +365,7 @@ export class ConvertJsonToDart {
     return methodString;
   }
 
-  generateEntityFromMapMethod(
+  generateFromMapMethod(
     className: string,
     properties: JsonObject,
     type: string = "Entity"
@@ -365,7 +382,13 @@ export class ConvertJsonToDart {
       } else if (typeof values === "string") {
         methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
       } else if (typeof values === "number") {
-        methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
+        if (Number.isInteger(values)) {
+          methodString += `      ${camelCaseKey}:map['${snakeCaseKey}'] != null ? int.parse("\${map['${snakeCaseKey}']}") : null,\n`;
+        } else if (values % 1 !== 0) {
+          methodString += `      ${camelCaseKey}:map['${snakeCaseKey}'] != null ? double.parse("\${map['${snakeCaseKey}']}") : null,\n`;
+        } else {
+          methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
+        }
       } else if (typeof values === "boolean") {
         methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
       } else if (Array.isArray(values)) {
@@ -377,9 +400,9 @@ export class ConvertJsonToDart {
           methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
         }
       } else if (typeof values === "object") {
-        methodString += `      ${camelCaseKey}: ${capitalizeFirstLetter(
+        methodString += `      ${camelCaseKey}:map['${snakeCaseKey}'] !=null ? ${capitalizeFirstLetter(
           toCamelCase(key)
-        )}${type}.fromMap(map['${snakeCaseKey}']),\n`;
+        )}${type}.fromMap(map['${snakeCaseKey}']): null,\n`;
       } else {
         methodString += `      ${camelCaseKey}: map['${snakeCaseKey}'],\n`;
       }
@@ -387,6 +410,79 @@ export class ConvertJsonToDart {
 
     methodString += "    );\n";
     methodString += "  }\n";
+
+    return methodString;
+  }
+
+  generateEqualityMethod(
+    className: string,
+    properties: JsonObject,
+    type: string
+  ): string {
+    const camelCaseKey = toCamelCase(Object.keys(properties)[0]);
+
+    let methodString = "  @override\n";
+    methodString += `  bool operator ==(covariant ${className} other) {\n`;
+    methodString += `    if (identical(this, other)) return true;\n`;
+    methodString += `    return`;
+    // if value is array then user listEquals
+    for (const [key, value] of Object.entries(properties)) {
+      const camelCaseKey = toCamelCase(key);
+      if (Array.isArray(value)) {
+        methodString += `   listEquals(${camelCaseKey}, other.${camelCaseKey})`;
+        // check of last element
+        if (
+          Object.keys(properties).indexOf(key) + 1 !==
+          Object.keys(properties).length
+        ) {
+          methodString += " &&\n";
+        }
+      } else {
+        methodString += `   ${camelCaseKey} == other.${camelCaseKey}`;
+        if (
+          Object.keys(properties).indexOf(key) + 1 !==
+          Object.keys(properties).length
+        ) {
+          methodString += " &&\n";
+        }
+      }
+    }
+    methodString += ";\n";
+    methodString += "  }\n";
+
+    methodString += "  @override\n";
+    methodString += "  int get hashCode {\n";
+    methodString += "    return ";
+    for (const [key, _] of Object.entries(properties)) {
+      const camelCaseKey = toCamelCase(key);
+      methodString += `${camelCaseKey}.hashCode`;
+      if (
+        Object.keys(properties).indexOf(key) + 1 !==
+        Object.keys(properties).length
+      ) {
+        methodString += " ^\n";
+      }
+    }
+    methodString += ";\n";
+    methodString += "  }\n";
+
+    return methodString;
+  }
+
+  generateToJsonFromJsonMethod(
+    className: string,
+    properties: JsonObject,
+    type: string
+  ): string {
+    // String toJson() => json.encode(toMap());
+
+    // factory DataEntity.fromJson(String source) =>
+    //     DataEntity.fromMap(json.decode(source) as Map<String, dynamic>);
+
+    let methodString = `  \n\nString toJson() => json.encode(toMap());\n\n`;
+
+    methodString += `  factory ${className}.fromJson(String source) =>\n`;
+    methodString += `    ${className}.fromMap(json.decode(source) as Map<String, dynamic>);\n\n\n`;
 
     return methodString;
   }
