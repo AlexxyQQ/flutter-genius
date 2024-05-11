@@ -74,6 +74,21 @@
           "type": "boolean",
           "default": false,
           "description": "Enable to automatically create model class for the class generated from JSON."
+        },
+        "flutterGenius.feature.createHive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Add Hive support to the feature."
+        },
+        "flutterGenius.feature.createCubit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add Cubit support to the feature."
+        },
+        "flutterGenius.feature.localDataSource": {
+          "type": "boolean",
+          "default": false,
+          "description": "Add local data source to the feature."
         }
       }
     }

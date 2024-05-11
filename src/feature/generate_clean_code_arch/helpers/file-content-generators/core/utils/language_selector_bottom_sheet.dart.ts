@@ -24,7 +24,7 @@ Future<dynamic> languageSelectorBottomSheet(BuildContext context) {
                       vertical: 20.h,
                     ),
                     child: Text(
-                      locator<I10n>().language,
+                      i10n.language,
                       style: Theme.of(context).textTheme.h5.copyWith(
                             color: AppColors().onBackground,
                           ),

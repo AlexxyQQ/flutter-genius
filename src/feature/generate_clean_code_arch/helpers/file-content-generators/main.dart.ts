@@ -8,7 +8,7 @@ export function mainDart() {
     // ! Comment this line to disable bloc observer
     Bloc.observer = AppBlocObserver();
     // Main app dependency injection container initialization
-    MainDIContainer().register();
+    MainDI().register();
     // Hive initialization
     await HiveService().init();
     runApp(

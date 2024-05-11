@@ -17,7 +17,7 @@ export function registerAddFeatureCommand() {
           vscode.window.showErrorMessage("Feature name cannot be empty!");
           return;
         }
-
+        console.log("ass2", uri.fsPath);
         createFeatureStructure(uri.fsPath, featureName);
         vscode.window.showInformationMessage(
           `Feature '${featureName}' has been created successfully in ${folderName}!`

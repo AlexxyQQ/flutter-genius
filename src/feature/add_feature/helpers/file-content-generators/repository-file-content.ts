@@ -1,4 +1,5 @@
 import { toPascalCase } from "../../../../utils/pascal-case";
+import { readSetting } from "../../../../utils/read-settings";
 
 export function repositoryFileContent(featureName: string, abstract: boolean) {
   if (abstract) {
@@ -10,18 +11,31 @@ export function repositoryFileContent(featureName: string, abstract: boolean) {
         `;
   }
 
+  const localDataSourceImport = readSetting("feature.localDataSource")
+    ? `import '../data_source/local/${featureName}_local_data_source.dart';`
+    : "";
+  const localDataSourceDeclaration = readSetting("feature.localDataSource")
+    ? `final ${toPascalCase(featureName)}LocalDataSource localDataSource;`
+    : "";
+  const localDataSourceInitialization = readSetting("feature.localDataSource")
+    ? `required this.localDataSource,`
+    : "";
+
   return `
-  import '../data_source/local/${featureName}_local_data_source.dart';
+  ${localDataSourceImport}
+  import '../data_source/remote/${featureName}_remote_data_source.dart';
   import '../../domain/repository/${featureName}_repository.dart';
 
 
   class ${toPascalCase(featureName)}RepositoryImpl implements I${toPascalCase(
     featureName
   )}Repository {
-    final ${toPascalCase(featureName)}LocalDataSource localDataSource;
+    ${localDataSourceDeclaration}
+    final ${toPascalCase(featureName)}RemoteDataSource remoteDataSource;
   
     ${toPascalCase(featureName)}RepositoryImpl({
-      required this.localDataSource,
+      ${localDataSourceInitialization}
+      required this.remoteDataSource,
     });
   }
             `;

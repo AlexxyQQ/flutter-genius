@@ -30,8 +30,6 @@ import DioErrorInterceptorDart from "../feature/generate_clean_code_arch/helpers
 import hiveServiceDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/connections/hive/hive_service.dart";
 import FailureDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/failure/error_handler.dart";
 import intlEnArbTs from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/localization/l10n/intl_en.arb";
-import navigationServiceDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/services/navigation_service.dart";
-import snackbarServiceDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/services/snackbar_service.dart";
 import allTextStylesDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/themes/text_themes/all_text_styles.dart";
 import textThemesDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/themes/text_themes/text_themes.dart";
 import appThemeDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/themes/app_theme.dart";
@@ -43,6 +41,7 @@ import languageSelectorBottomSheetDart from "../feature/generate_clean_code_arch
 import mainDiDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/di/main_di.dart";
 import exportsDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/exports.dart";
 import apiDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/connections/api/api.dart";
+import appLocales from "../feature/generate_clean_code_arch/helpers/file-content-generators/config/constants/locales/app_locales.dart";
 
 export function writeToGeneratedFile(
   path: string,
@@ -66,6 +65,9 @@ export function writeToGeneratedFile(
       break;
     case `${featureName}_local_data_source.dart`:
       fileContent = dataSourceFileContent(featureName, true, false);
+      break;
+    case `${featureName}_remote_data_source.dart`:
+      fileContent = dataSourceFileContent(featureName, false, false);
       break;
     case `${featureName}_repository.dart`:
       fileContent = repositoryFileContent(featureName, true);
@@ -108,6 +110,10 @@ export function writeToGeneratedFile(
     // --Images
     case "image_path_constants.dart":
       fileContent = imagePathConstantsDart();
+      break;
+    // --Locales
+    case "app_locales.dart":
+      fileContent = appLocales();
       break;
     // -Routes
     case "routes.dart":
@@ -192,15 +198,6 @@ export function writeToGeneratedFile(
     // ---intl_en.arb
     case "intl_en.arb":
       fileContent = intlEnArbTs();
-      break;
-    // -Services
-    // --Navigation Service
-    case "navigation_service.dart":
-      fileContent = navigationServiceDart();
-      break;
-    // --Snackbar Service
-    case "snackbar_service.dart":
-      fileContent = snackbarServiceDart();
       break;
     // -Themes
     // --Text Theme

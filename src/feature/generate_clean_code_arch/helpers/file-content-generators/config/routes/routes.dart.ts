@@ -14,7 +14,21 @@ export default function routesDart() {
     static final Map<String, Widget Function(BuildContext)> routes = {
       initialRoute: (context) => const SplashView(),
     };
-  }
   
+  
+  // onGenerateRoute
+  static Route<dynamic> onGenerateRoute(RouteSettings settings) {
+    if (routes.containsKey(settings.name)) {
+      // Get the function to create the route
+      final routeBuilder = routes[settings.name];
+      return MaterialPageRoute(builder: (context) => routeBuilder!(context));
+    } else {
+      // If the route is not found, navigate to unknownRoute
+      return MaterialPageRoute(
+        builder: (context) => const NoRoutePage(),
+      );
+    }
+  }
+}
     `;
 }

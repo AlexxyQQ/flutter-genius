@@ -1,7 +1,9 @@
 export default function localCubitDart() {
   return `
     import '../../common/exports.dart';
-
+// Local Global Instance
+final I10n i10n = locator<I10n>();
+    
 class LocaleCubit extends Cubit<LocaleState> {
   LocaleCubit({
     required this.settingsHiveService,
@@ -31,10 +33,7 @@ class LocaleCubit extends Cubit<LocaleState> {
     if (settings.languageCode == null) {
       emit(
         state.copyWith(
-          selectedLocale: const Locale(
-            'en',
-            'English',
-          ),
+          selectedLocale: appLocales.first,
         ),
       );
     } else {

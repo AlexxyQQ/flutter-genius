@@ -16,6 +16,7 @@ export function createCleanCodeFeatureStructure(basePath: string) {
           },
           hive: { "hive_table_constants.dart": "" },
           images: { "image_path_constants.dart": "" },
+          locales: { "app_locales.dart": "" },
         },
         routes: { "routes.dart": "" },
       },
@@ -40,6 +41,11 @@ export function createCleanCodeFeatureStructure(basePath: string) {
             },
             "app_settings_hive_model.dart": "",
           },
+          entities: {},
+          models: {
+            hive_models: {},
+          },
+          common_widgets: {},
         },
         connections: {
           api: { "dio_service.dart": "", "dio_error_interceptor.dart": "" },
@@ -50,10 +56,6 @@ export function createCleanCodeFeatureStructure(basePath: string) {
           l10n: {
             "intl_en.arb": "",
           },
-        },
-        services: {
-          "navigation_service.dart": "",
-          "snackbar_service.dart": "",
         },
         themes: {
           text_theme: {
@@ -73,7 +75,9 @@ export function createCleanCodeFeatureStructure(basePath: string) {
         },
         "app.dart": "",
       },
-      features: {},
+      features: {
+        splash: [],
+      },
       di: { "main_di.dart": "" },
       "main.dart": "",
     },

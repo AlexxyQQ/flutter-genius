@@ -74,7 +74,7 @@ class Failure {
 
   static Failure fromDioException(DioException e) {
     return Failure(
-      message: e.message ?? locator<I10n>().error_somethingWentWrong,
+      message: e.message ?? i10n.error_somethingWentWrong,
       code: e.response?.statusCode.toString(),
       data: e.response?.data.toString(),
       status: false,

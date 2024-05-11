@@ -4,14 +4,12 @@ export default function mainDiDart() {
 
 final locator = GetIt.instance;
 
-class MainDIContainer {
+class MainDI {
   void register() {
     // Default injection container
-    locator.registerLazySingleton(() => NavigationService());
-    locator.registerLazySingleton(() => SnackbarService());
     locator.registerLazySingleton(() => Api());
+    locator.registerLazySingleton(() => HiveService());
     locator.registerLazySingleton(() => SettingsHiveService());
-    locator.registerLazySingleton(() => LocalAuthentication());
     locator.registerLazySingleton(() => I10n());
     locator.registerLazySingleton(
       () => LocaleCubit(
@@ -20,7 +18,7 @@ class MainDIContainer {
     );
 
     // Feature Containers
-    //AuthenticationDIContainer().register();
+    //AuthenticationDI().register();
   }
 }
 

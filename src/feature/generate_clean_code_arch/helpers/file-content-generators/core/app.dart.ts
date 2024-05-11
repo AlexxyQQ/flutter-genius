@@ -22,9 +22,7 @@ class _AppState extends State<App> {
           return BlocBuilder<LocaleCubit, LocaleState>(
             builder: (context, state) {
               return MaterialApp(
-                scaffoldMessengerKey: locator<SnackbarService>().messengerKey,
-                navigatorKey: locator<NavigationService>().navigatorKey,
-                title: locator<I10n>().common_appName,
+                title: i10n.common_appName,
                 debugShowCheckedModeBanner: false,
                 locale: state.selectedLocale,
                 localizationsDelegates: const [
@@ -33,19 +31,21 @@ class _AppState extends State<App> {
                   GlobalWidgetsLocalizations.delegate,
                   GlobalCupertinoLocalizations.delegate,
                 ],
-                supportedLocales: I10n.delegate.supportedLocales,
+                supportedLocales: state.locales,
                 localeResolutionCallback: (deviceLocale, supportedLocales) {
                   if (supportedLocales
-                      .map((e) => e.languageCode)
-                      .contains(deviceLocale?.languageCode)) {
-                    return deviceLocale;
+                    .map((e) => e.languageCode)
+                    .contains(deviceLocale?.languageCode)) {
+                  return deviceLocale;
                   } else {
-                    return state.selectedLocale;
+                    return state.locales.first;
                   }
                 },
                 theme: AppTheme.appLightTheme(),
                 themeMode: ThemeMode.light,
                 routes: AppRoutes.routes,
+                onGenerateRoute:
+                    AppRoutes.onGenerateRoute,
               );
             },
           );

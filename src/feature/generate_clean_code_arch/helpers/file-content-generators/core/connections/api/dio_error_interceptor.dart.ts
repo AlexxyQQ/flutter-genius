@@ -12,14 +12,14 @@ class DioErrorInterceptor extends Interceptor {
         err = DioException(
           requestOptions: err.requestOptions,
           response: err.response,
-          error: locator<I10n>().error_serverError,
+          error: i10n.error_serverError,
           type: err.type,
         );
       } else {
         err = DioException(
           requestOptions: err.requestOptions,
           response: err.response,
-          error: locator<I10n>().error_somethingWentWrong,
+          error: i10n.error_somethingWentWrong,
           type: err.type,
         );
       }
@@ -27,7 +27,7 @@ class DioErrorInterceptor extends Interceptor {
       // Handle connection errors
       err = DioException(
         requestOptions: err.requestOptions,
-        error: locator<I10n>().error_connectionError,
+        error: i10n.error_connectionError,
         type: err.type,
       );
     }

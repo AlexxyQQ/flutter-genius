@@ -2,18 +2,17 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { writeToGeneratedFile } from "../../../utils/write-to-generated-file";
+import { readSetting } from "../../../utils/read-settings";
 
 // Main function to create the feature structure.
 export function createFeatureStructure(basePath: string, featureName: string) {
   // Access configuration settings specific to this extension.
   const config = vscode.workspace.getConfiguration("flutterGenius");
-
   // Retrieve settings from configuration; default to true if not set.
-  const createHive = config.get<boolean>("createHive", true);
-  const createInjectionContainer = config.get<boolean>(
-    "createInjectionContainer",
-    true
-  );
+  const createHive = readSetting("feature.createHive");
+  const createInjectionContainer = true;
+  const createCubit = readSetting("feature.createCubit");
+  const createLocalDataSource = readSetting("feature.localDataSource");
 
   // Construct the path for the new feature directory.
   const featureDirPath = path.join(basePath, featureName);
@@ -22,61 +21,71 @@ export function createFeatureStructure(basePath: string, featureName: string) {
   let structure = getInitialStructure(
     featureName,
     createHive,
-    createInjectionContainer
+    createCubit,
+    createLocalDataSource
   );
 
   // Recursively create the directory and file structure.
   generateStructure(featureDirPath, structure, featureName);
 }
-
 // Function to initialize the folder and file structure based on user settings.
 function getInitialStructure(
   featureName: string,
   createHive: boolean,
-  createInjectionContainer: boolean
+  createCubit: boolean,
+  createLocalDataSource: boolean
 ) {
   // Define the base structure object with predefined directories and files.
   let structure: any = {
     domain: {
-      entity: [`${featureName}_entity.dart`],
+      entities: [`${featureName}_entity.dart`],
       usecase: [`get_all_${featureName}_usecase.dart`],
       repository: [`${featureName}_repository.dart`],
     },
     data: {
+      local: {}, // Placeholder for local data source files; initially empty.
       data_source: {
-        local: {}, // Placeholder for local data sources; initially empty.
         remote: [`${featureName}_remote_data_source.dart`], // Predefined remote data source.
       },
-      model: {}, // Placeholder for models; initially empty.
+      models: {}, // Placeholder for models; initially empty.
       repository: [`${featureName}_repository_impl.dart`], // Predefined repository implementation.
     },
     presentation: {
-      cubit: [`${featureName}_state.dart`, `${featureName}_cubit.dart`], // Predefined state and cubit files for Cubit state management.
       view: [`${featureName}_view.dart`], // Predefined view file.
       widget: {},
     },
+    di: [`${featureName}_di.dart`],
   };
+
+  // If Cubit setting is enabled, add Cubit-specific files.
+  if (createCubit) {
+    structure.presentation.cubit = [
+      `${featureName}_cubit.dart`,
+      `${featureName}_state.dart`,
+    ];
+  }
 
   // If Hive setting is enabled, add Hive-specific files.
   if (createHive) {
-    structure.data.model.hive = [`${featureName}_hive_model.dart`];
+    structure.data.models.hive_models = [`${featureName}_hive_model.dart`];
+    structure.data.data_source.local = {}; // Initialize local data source object.
     structure.data.data_source.local.hive_service = [
       `${featureName}_hive_service.dart`,
     ];
   }
 
-  // If Injection Container setting is enabled, add an injection container file.
-  if (createInjectionContainer) {
-    structure[featureName + "_injection_container"] = [
-      `${featureName}_injection_container.dart`,
+  // If Local Data Source setting is enabled, add local data source file.
+  if (createLocalDataSource) {
+    structure.data.data_source.local = {}; // Initialize local data source object.
+    structure.data.data_source.local[""] = [
+      `${featureName}_local_data_source.dart`,
     ];
   }
 
-  // Basic local data source and model files are always included.
-  structure.data.data_source.local[""] = [
-    `${featureName}_local_data_source.dart`,
-  ];
-  structure.data.model[""] = [`${featureName}_model.dart`];
+  // Basic model files are always included.
+  structure.data.models[featureName] = [`${featureName}_model.dart`];
+
+  // If Injection Container setting is enabled, add injection container file.
 
   return structure;
 }
