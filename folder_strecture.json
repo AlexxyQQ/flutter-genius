@@ -1,0 +1,344 @@
+{
+  "lib": {
+    "config": {
+      "DESCRIPTION": "This folder contains all the configurations used in the app like theme, localization, etc. These values are constant and should not be changed during the runtime of the app.",
+      "constants": {
+        "DESCRIPTION": "This folder contains all the constants used in the app like API endpoints, colors, etc. These values are constant and should not be changed during the runtime of the app.",
+        "api": {
+          "file_name": "api_endpoints.dart",
+          "DESCRIPTION": " This file contains all the API endpoints used in the app."
+        },
+        "colors": {
+          "DESCRIPTION": " This folder contains all the colors and gradients used in the app or for specific features.",
+          "app_colors": [
+            {
+              "DESCRIPTION": " This folder contains the colors used in the app."
+            },
+            {
+              "file_name": "primitive_app_colors.dart",
+              "DESCRIPTION": "This file contains all the colors used in the app"
+            },
+            {
+              "file_name": "app_semantics.dart",
+              "DESCRIPTION": "This file contains all the semantics used in the app"
+            }
+          ],
+          "app_gradients": [
+            {
+              "DESCRIPTION": " This folder contains the gradients used in the app."
+            },
+            {
+              "file_name": "app_gradients.dart",
+              "DESCRIPTION": "This file contains all the gradients used in the app"
+            }
+          ],
+          "something_color": [
+            {
+              "DESCRIPTION": " This folder contains the colors used for something."
+            },
+            {
+              "file_name": "something_color.dart",
+              "DESCRIPTION": "This file contains all the colors required for something"
+            }
+          ]
+        },
+        "data": {
+          "DESCRIPTION": "This folder contains all the data required for the app like locales, local data for entity , etc.",
+          "locales": {
+            "file_name": "app_locales.dart",
+            "DESCRIPTION": "This file contains all the locales used in the app"
+          },
+          "something_data": [
+            {
+              "file_name": "something_data.dart",
+              "DESCRIPTION": "This file contains all the data required for something"
+            }
+          ]
+        },
+        "enums": {
+          "DESCRIPTION": "This folder contains all the enums used in the app.",
+          "something_enum": [
+            {
+              "file_name": "something_enum.dart",
+              "DESCRIPTION": "This file contains all the enums required for something"
+            }
+          ],
+          "something_else_enum": [
+            {
+              "file_name": "something_else_enum.dart",
+              "DESCRIPTION": "This file contains all the enums required for something else"
+            }
+          ]
+        },
+        "hive": {
+          "file_name": "hive_table_constants.dart",
+          "DESCRIPTION": "This file contains all the hive table id and box names used in the app"
+        },
+        "images": {
+          "DESCRIPTION": "This folder contains all the images used in the app.",
+          "app_images": [
+            {
+              "file_name": "app_images.dart",
+              "DESCRIPTION": "This file contains all the images used in the app"
+            }
+          ],
+          "something_images": [
+            {
+              "file_name": "something_images.dart",
+              "DESCRIPTION": "This file contains all the images required for something"
+            }
+          ]
+        },
+        "themes": [
+          {
+            "DESCRIPTION": "This folder contains all the themes used in the app, like text theme, color theme(light and dark), etc."
+          },
+          {
+            "app_theme": [
+              {
+                "file_name": "app_theme.dart",
+                "DESCRIPTION": "This file contains the app theme"
+              }
+            ]
+          },
+          {
+            "text_theme": [
+              {
+                "file_name": "all_text_styles.dart",
+                "DESCRIPTION": "This file contains all the text styles that are used in the app"
+              },
+              {
+                "file_name": "custom_text_styles.dart",
+                "DESCRIPTION": "This file contains the custom text styles for the app"
+              }
+            ]
+          }
+        ]
+      },
+      "routes": {
+        "file_name": "app_routes.dart",
+        "DESCRIPTION": "This file contains all the routes used in the app"
+      }
+    },
+    "core": {
+      "bloc": {
+        "DESCRIPTION": "This folder contains the bloc providers that need to be registered in the app, also the common blocs that needs to use across the app.",
+        "app_bloc_observer": [
+          {
+            "file_name": "app_bloc_observer.dart",
+            "DESCRIPTION": "This file contains all the bloc observer used in the app"
+          }
+        ],
+        "app_bloc_providers": [
+          {
+            "file_name": "app_bloc_providers.dart",
+            "DESCRIPTION": "This file contains all the bloc providers used in the app"
+          }
+        ],
+        "locale_cubit": [
+          {
+            "file_name": "locale_cubit.dart",
+            "DESCRIPTION": "This file contains cubit for locale"
+          },
+          {
+            "file_name": "locale_state.dart",
+            "DESCRIPTION": "This file contains state for locale"
+          }
+        ]
+      },
+      "common": {
+        "DESCRIPTION": "This folder contains all the common widgets,entities,models,hive ets, used in the app. If something needs to used across multiple features add it here.",
+        "custom_widgets": [
+          {
+            "DESCRIPTION": "This folder contains all the custom widgets used in the app"
+          },
+          {
+            "file_name": "custom_button.dart",
+            "DESCRIPTION": "This file contains all the custom button used in the app"
+          },
+          {
+            "file_name": "custom_text_field.dart",
+            "DESCRIPTION": "This file contains all the custom text field used in the app"
+          }
+        ],
+        "entities": {
+          "DESCRIPTION": "This folder contains all the entities used in the app.",
+          "something_entity": [
+            {
+              "file_name": "something_entity.dart",
+              "DESCRIPTION": "This file contains all the entities required for something"
+            }
+          ],
+          "something_else_entity": [
+            {
+              "file_name": "something_else_entity.dart",
+              "DESCRIPTION": "This file contains all the entities required for something else"
+            }
+          ]
+        },
+        "models": {
+          "DESCRIPTION": "This folder contains all the models used in the app.",
+          "something_model": [
+            {
+              "file_name": "something_model.dart",
+              "DESCRIPTION": "This file contains all the models required for something"
+            }
+          ],
+          "something_else_model": [
+            {
+              "file_name": "something_else_model.dart",
+              "DESCRIPTION": "This file contains all the models required for something else"
+            }
+          ]
+        },
+        "repositories": {
+          "DESCRIPTION": "This folder contains all the repositories used in the app.",
+          "something_repository": [
+            {
+              "file_name": "something_repository.dart",
+              "DESCRIPTION": "This file contains all the repositories required for something"
+            }
+          ],
+          "something_else_repository": [
+            {
+              "file_name": "something_else_repository.dart",
+              "DESCRIPTION": "This file contains all the repositories required for something else"
+            }
+          ]
+        },
+        "pages": {
+          "DESCRIPTION": "This folder contains all the pages used in the app.",
+          "something_page": [
+            {
+              "file_name": "something_page.dart",
+              "DESCRIPTION": "This file contains all the pages required for something"
+            }
+          ],
+          "something_else_page": [
+            {
+              "file_name": "something_else_page.dart",
+              "DESCRIPTION": "This file contains all the pages required for something else"
+            }
+          ]
+        },
+        "common_widgets": [
+          {
+            "DESCRIPTION": "This folder contains all the common widgets that doesn't belong to any feature used in the app."
+          },
+          {
+            "file_name": "app_drawer.dart",
+            "DESCRIPTION": "This file contains the drawer used in the app"
+          },
+          {
+            "file_name": "loader.dart",
+            "DESCRIPTION": "This file contains the loader used in the app"
+          }
+        ],
+        "exports": {
+          "file_name": "exports.dart",
+          "DESCRIPTION": "This file stores all the exports of the entire app"
+        }
+      },
+      "failure": {
+        "DESCRIPTION": "This folder contains the file for failure.",
+        "": {
+          "file_name": "failure.dart",
+          "DESCRIPTION": "This file contains the class for failure"
+        }
+      },
+      "localization": {
+        "DESCRIPTION": "This folder is for localization , add it to the pubspec.yaml file. User Flutter Intl extension",
+        "l10n": [
+          {
+            "file_name": "intl_en.arb",
+            "DESCRIPTION": "This file contains the localization for english"
+          }
+        ]
+      },
+      "services": [
+        {
+          "DESCRIPTION": "This folder contains all the services used in the app like api service, local storage service, etc."
+        },
+        {
+          "api_service": [
+            {
+              "DESCRIPTION": "This folder contains the services used for the api like dio, http or socket etc."
+            },
+            {
+              "file_name": "dio_client.dart",
+              "DESCRIPTION": "This file contains service for the dio client"
+            },
+            {
+              "file_name": "dio_interceptors.dart",
+              "DESCRIPTION": "This file contains all the interceptors used in the dio client"
+            }
+          ]
+        },
+        {
+          "local_storage_service": [
+            {
+              "DESCRIPTION": "This folder contains the services used for the local storage like shared preferences, hive etc."
+            },
+            {
+              "file_name": "hive_service.dart",
+              "DESCRIPTION": "This file contains service for the hive"
+            }
+          ]
+        }
+      ],
+      "usecase": {
+        "DESCRIPTION": "This folder contains the generic usecase class.",
+        "": {
+          "file_name": "usecase.dart",
+          "DESCRIPTION": "This file contains the generic usecase class"
+        }
+      },
+      "utils": [
+        {
+          "DESCRIPTION": "This folder contains all the utility classes used in the app like extensions, validators, functions etc, "
+        },
+        {
+          "extensions": [
+            {
+              "DESCRIPTION": "This folder contains all the extensions used in the app"
+            },
+            {
+              "file_name": "app_theme_extensions.dart",
+              "DESCRIPTION": "This file contains the text styles form the custom_text_styles.dart file as extension to the text theme"
+            },
+            {
+              "file_name": "all_theme_extensions.dart",
+              "DESCRIPTION": "This file contains the text styles form the all_text_styles.dart file as extension to the text theme"
+            }
+          ]
+        },
+        {
+          "functions": [
+            {
+              "DESCRIPTION": "This folder contains all the functions used in the app"
+            },
+            {
+              "file_name": "connectivity_checker.dart",
+              "DESCRIPTION": "This file contains function to check the connectivity and server status"
+            }
+          ]
+        }
+      ],
+      "": {
+        "file_name": "app.dart",
+        "DESCRIPTION": "This file contains the main app widget"
+      }
+    },
+    "di": {
+      "DESCRIPTION": "This folder contains the dependency injection setup for the app.",
+      "": {
+        "file_name": "app_di.dart",
+        "DESCRIPTION": "This file contains the dependency injection setup for the app also nictate other di setup here."
+      }
+    },
+    "": {
+      "file_name": "main.dart",
+      "DESCRIPTION": "This file contains the main  function"
+    }
+  }
+}

@@ -51,6 +51,10 @@
       {
         "command": "flutter-genius.convertJsonToDart",
         "title": "Convert JSON to Dart"
+      },
+      {
+        "command": "flutter-genius.createExportFile",
+        "title": "Generate Export File"
       }
     ],
     "menus": {

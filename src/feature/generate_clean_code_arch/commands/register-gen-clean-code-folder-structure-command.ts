@@ -29,6 +29,19 @@ export function createGenerateCleanCodeFolderStructureCommand() {
                   vscode.window.showInformationMessage(
                     "Change the YOUR_PROJECT_NAME to your project name"
                   );
+                  const terminal = vscode.window.createTerminal();
+                  terminal.sendText(
+                    "flutter pub add hive_flutter dio dartz flutter_bloc get_it connectivity_plus flutter_screenutil flutter_svg flutter_localization intl"
+                  );
+                  terminal.sendText(
+                    "flutter pub add --dev hive_generator build_runner flutter_gen pretty_dio_logger"
+                  );
+                  terminal.sendText("flutter pub get");
+                  terminal.sendText(
+                    "dart run build_runner build --delete-conflicting-outputs"
+                  );
+                  terminal.sendText("dart fix --apply");
+                  terminal.show();
                 });
             } else {
               vscode.window.showErrorMessage(

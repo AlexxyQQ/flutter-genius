@@ -22,6 +22,16 @@ export function registerAddFeatureCommand() {
         vscode.window.showInformationMessage(
           `Feature '${featureName}' has been created successfully in ${folderName}!`
         );
+        const terminal = vscode.window.createTerminal();
+        terminal.sendText(
+          "flutter pub add hive_flutter dio dartz flutter_bloc get_it"
+        );
+        terminal.sendText(
+          "flutter pub add --dev hive_generator build_runner flutter_gen"
+        );
+        terminal.sendText("flutter pub get");
+        terminal.sendText("dart fix --apply");
+        terminal.show();
       } else {
         vscode.window.showErrorMessage(
           "This command can only be executed on a directory named 'features'."

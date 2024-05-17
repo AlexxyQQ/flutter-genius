@@ -37,6 +37,17 @@ export function convertJsonToDartCommand() {
           vscode.window.showInformationMessage(
             "Dart classes generated successfully."
           );
+          vscode.window.showInformationMessage(
+            "Export statement added successfully. Running dart fix --apply command..."
+          );
+          const terminal = vscode.window.createTerminal();
+          terminal.sendText("flutter pub add hive_flutter");
+          terminal.sendText(
+            "flutter pub add --dev hive_generator build_runner flutter_gen"
+          );
+          terminal.sendText("flutter pub get");
+          terminal.sendText("dart fix --apply");
+          terminal.show();
         } catch (error: any) {
           console.log(`errorFound: ${error}`);
           vscode.window.showErrorMessage(error);
