@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { createFeatureStructure } from "./feature-structure-generator";
+import { readSetting } from "../../../utils/read-settings";
 export function registerAddFeatureCommand() {
+  const createHive = readSetting("feature.createHive");
+
   let addFeatureCommand = vscode.commands.registerCommand(
     "flutter-genius.addFeature",
     async (uri: vscode.Uri) => {
@@ -17,7 +20,6 @@ export function registerAddFeatureCommand() {
           vscode.window.showErrorMessage("Feature name cannot be empty!");
           return;
         }
-        console.log("ass2", uri.fsPath);
         createFeatureStructure(uri.fsPath, featureName);
         vscode.window.showInformationMessage(
           `Feature '${featureName}' has been created successfully in ${folderName}!`
@@ -26,9 +28,11 @@ export function registerAddFeatureCommand() {
         terminal.sendText(
           "flutter pub add hive_flutter dio dartz flutter_bloc get_it"
         );
-        terminal.sendText(
-          "flutter pub add --dev hive_generator build_runner flutter_gen"
-        );
+        if (createHive) {
+          terminal.sendText(
+            "flutter pub add --dev hive_generator build_runner flutter_gen"
+          );
+        }
         terminal.sendText("flutter pub get");
         terminal.sendText("dart fix --apply");
         terminal.show();

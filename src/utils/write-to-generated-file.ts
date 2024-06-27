@@ -42,13 +42,16 @@ import mainDiDart from "../feature/generate_clean_code_arch/helpers/file-content
 import exportsDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/common/exports.dart";
 import apiDart from "../feature/generate_clean_code_arch/helpers/file-content-generators/core/connections/api/api.dart";
 import appLocales from "../feature/generate_clean_code_arch/helpers/file-content-generators/config/constants/locales/app_locales.dart";
+import { findProjectName } from "./get-app-name";
 
-export function writeToGeneratedFile(
+export async function writeToGeneratedFile(
   path: string,
   file: any,
   featureName: string
 ) {
   let fileContent: string;
+
+  let app_name = await findProjectName();
 
   switch (file) {
     case `${featureName}_entity.dart`:
@@ -148,7 +151,7 @@ export function writeToGeneratedFile(
       break;
     // ---Export
     case "exports.dart":
-      fileContent = exportsDart();
+      fileContent = exportsDart(app_name);
       break;
     // --Custom Widgets
     // ----Custom Button

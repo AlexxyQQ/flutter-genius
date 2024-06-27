@@ -327,7 +327,7 @@ export class ConvertJsonToDart {
     for (const [key, value] of Object.entries(properties)) {
       const type = this.getType(value, `${key}${modelType}`);
       const camelCaseKey = toCamelCase(key);
-      methodString += `    ${type}? ${camelCaseKey},\n`;
+      methodString += `    ValueGetter<${type}?>? ${camelCaseKey},\n`;
     }
 
     methodString += "  }) {\n";
@@ -337,7 +337,7 @@ export class ConvertJsonToDart {
 
     for (const [key, _] of Object.entries(properties)) {
       const camelCaseKey = toCamelCase(key);
-      methodString += `      ${camelCaseKey}: ${camelCaseKey} ?? this.${camelCaseKey},\n`;
+      methodString += `      ${camelCaseKey}: ${camelCaseKey} != null ? ${camelCaseKey}(): this.${camelCaseKey},\n`;
     }
 
     methodString += "    );\n";

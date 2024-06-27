@@ -1,27 +1,27 @@
-export default function FailureDart() {
+export default function AppErrorHandlerDart() {
   return `// ! DO NOT MODIFY THIS FILE
 
 import '../common/exports.dart';
 
-class Failure {
+class AppErrorHandler {
   final String message;
   final String? code;
   final String? data;
   final bool status;
-  Failure({
+  AppErrorHandler({
     required this.message,
     this.code,
     this.data,
     required this.status,
   });
 
-  Failure copyWith({
+  AppErrorHandler copyWith({
     String? message,
     String? code,
     String? data,
     bool? status,
   }) {
-    return Failure(
+    return AppErrorHandler(
       message: message ?? this.message,
       code: code ?? this.code,
       data: data ?? this.data,
@@ -38,8 +38,8 @@ class Failure {
     };
   }
 
-  factory Failure.fromMap(Map<String, dynamic> map) {
-    return Failure(
+  factory AppErrorHandler.fromMap(Map<String, dynamic> map) {
+    return AppErrorHandler(
       message: map['message'] as String,
       code: map['code'] != null ? map['code'] as String : null,
       data: map['data'] != null ? map['data'] as String : null,
@@ -49,16 +49,16 @@ class Failure {
 
   String toJson() => json.encode(toMap());
 
-  factory Failure.fromJson(String source) =>
-      Failure.fromMap(json.decode(source) as Map<String, dynamic>);
+  factory AppErrorHandler.fromJson(String source) =>
+      AppErrorHandler.fromMap(json.decode(source) as Map<String, dynamic>);
 
   @override
   String toString() {
-    return 'Failure(message: $message, code: $code, data: $data, status: $status)';
+    return 'AppErrorHandler(message: $message, code: $code, data: $data, status: $status)';
   }
 
   @override
-  bool operator ==(covariant Failure other) {
+  bool operator ==(covariant AppErrorHandler other) {
     if (identical(this, other)) return true;
 
     return other.message == message &&
@@ -72,8 +72,8 @@ class Failure {
     return message.hashCode ^ code.hashCode ^ data.hashCode ^ status.hashCode;
   }
 
-  static Failure fromDioException(DioException e) {
-    return Failure(
+  static AppErrorHandler fromDioException(DioException e) {
+    return AppErrorHandler(
       message: e.message ?? i10n.error_somethingWentWrong,
       code: e.response?.statusCode.toString(),
       data: e.response?.data.toString(),

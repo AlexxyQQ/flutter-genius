@@ -22,7 +22,7 @@ export function modelFileContent(featureName: string, hive: boolean) {
   }
 
   return `
-  import '../../../domain/entities/${featureName}_entity.dart';
+  import '../../domain/entities/${featureName}_entity.dart';
 
   class ${toPascalCase(featureName)}Model extends ${toPascalCase(
     featureName

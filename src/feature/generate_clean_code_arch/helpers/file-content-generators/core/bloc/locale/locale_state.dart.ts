@@ -6,7 +6,7 @@ import '../../common/exports.dart';
 class LocaleState {
   final bool isLoading;
   final bool isSuccess;
-  final Failure? error;
+  final AppErrorHandler? error;
   final List<Locale> locales;
   final Locale selectedLocale;
   LocaleState({
@@ -39,7 +39,7 @@ class LocaleState {
   LocaleState copyWith({
     bool? isLoading,
     bool? isSuccess,
-    Failure? error,
+    AppErrorHandler? error,
     List<Locale>? locales,
     Locale? selectedLocale,
   }) {

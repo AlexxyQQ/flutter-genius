@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { getLibPath } from "../utils/check-lib-folder";
 import { createCleanCodeFeatureStructure } from "./clean-code-folder-structure-generator";
 import * as fs from "fs";
+import * as path from "path";
 import { createFeatureStructure } from "../../add_feature/commands/feature-structure-generator";
 
 export function createGenerateCleanCodeFolderStructureCommand() {
@@ -10,25 +11,41 @@ export function createGenerateCleanCodeFolderStructureCommand() {
       "flutter-genius.createCleanCodeFolderStructure",
       async (uri: vscode.Uri) => {
         if (vscode.workspace.workspaceFolders) {
-          var libPath = getLibPath([...vscode.workspace.workspaceFolders]);
+          const libPath = getLibPath([...vscode.workspace.workspaceFolders]);
           if (libPath) {
             createCleanCodeFeatureStructure(libPath);
-            const filePath = libPath + "\\lib\\core\\common\\exports.dart";
-            // Check if the file exists
-            if (await fs.existsSync(vscode.Uri.file(filePath).fsPath)) {
-              // Open the file
+
+            const pubspecPath = path.join(libPath, "pubspec.yaml");
+            const intlConfig = `
+flutter_intl:
+  enabled: true
+  class_name: I10n
+  main_locale: en
+  arb_dir: lib/core/localization/l10n
+  output_dir: lib/core/localization/generated`;
+
+            if (fs.existsSync(pubspecPath)) {
+              let pubspecContent = fs.readFileSync(pubspecPath, "utf8");
+              if (!pubspecContent.includes("flutter_intl:")) {
+                pubspecContent += intlConfig;
+                fs.writeFileSync(pubspecPath, pubspecContent, "utf8");
+                vscode.window.showInformationMessage(
+                  "flutter_intl configuration added to pubspec.yaml"
+                );
+              }
+
               vscode.workspace
-                .openTextDocument(vscode.Uri.file(filePath))
+                .openTextDocument(vscode.Uri.file(pubspecPath))
                 .then((doc) => {
-                  // Show the document
                   createFeatureStructure(
-                    libPath + "\\lib\\features\\",
+                    path.join(libPath, "lib", "features"),
                     "splash"
                   );
                   vscode.window.showTextDocument(doc);
                   vscode.window.showInformationMessage(
                     "Change the YOUR_PROJECT_NAME to your project name"
                   );
+
                   const terminal = vscode.window.createTerminal();
                   terminal.sendText(
                     "flutter pub add hive_flutter dio dartz flutter_bloc get_it connectivity_plus flutter_screenutil flutter_svg flutter_localization intl"
@@ -44,16 +61,13 @@ export function createGenerateCleanCodeFolderStructureCommand() {
                   terminal.show();
                 });
             } else {
-              vscode.window.showErrorMessage(
-                "The file doesn't exist at: " + filePath
-              );
+              vscode.window.showErrorMessage("pubspec.yaml file not found.");
             }
           } else {
             vscode.window.showErrorMessage("lib folder not found.");
           }
         } else {
           vscode.window.showErrorMessage("No workspace folder found.");
-          return;
         }
       }
     );

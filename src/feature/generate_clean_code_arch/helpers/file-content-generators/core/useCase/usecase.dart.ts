@@ -4,7 +4,7 @@ export default function useCaseDart() {
     import '../common/exports.dart';
     
     abstract class Usecase<Type, Params> {
-      Future<Either<Failure, Type>> call(Params params);
+      Future<Either<AppErrorHandler, Type>> call(Params params);
     }
     `;
 }

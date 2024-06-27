@@ -1,8 +1,8 @@
 {
   "name": "flutter-genius",
-  "displayName": "FlutterGenius",
-  "description": "FlutterGenius: Streamline your Flutter development with automated folder structures, feature generation, and JSON to Dart class conversion.",
-  "publisher": "alexxy",
+  "displayName": "Flutter Genius",
+  "description": "Flutter Genius: Streamline your Flutter development with automated folder structures, feature generation, and JSON to Dart class conversion.",
+  "publisher": "AlexxyQQ",
   "author": {
     "name": "Aayush Pandey",
     "url": "https://github.com/alexxyqq",
@@ -32,29 +32,36 @@
     "feature-driven design",
     "feature folder structure generator",
     "bloc",
-    "state-management"
+    "state-management",
+    "dart data class generator",
+    "dart data class",
+    "dart data",
+    "dart",
+    "data class generator",
+    "value getter"
   ],
   "activationEvents": [
-    "onLanguage:plaintext"
+    "onLanguage:plaintext",
+    "onLanguage:dart"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "flutter-genius.addFeature",
-        "title": "Add Feature"
+        "title": "Flutter Genius: Add Feature"
       },
       {
         "command": "flutter-genius.createCleanCodeFolderStructure",
-        "title": "Create Clean Code Folder Structure"
+        "title": "Flutter Genius: Create Clean Code Folder Structure"
       },
       {
         "command": "flutter-genius.convertJsonToDart",
-        "title": "Convert JSON to Dart"
+        "title": "Flutter Genius: Convert JSON to Dart"
       },
       {
         "command": "flutter-genius.createExportFile",
-        "title": "Generate Export File"
+        "title": "Flutter Genius: Generate Export File"
       }
     ],
     "menus": {

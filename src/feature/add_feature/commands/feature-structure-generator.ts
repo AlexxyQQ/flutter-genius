@@ -28,6 +28,7 @@ export function createFeatureStructure(basePath: string, featureName: string) {
   // Recursively create the directory and file structure.
   generateStructure(featureDirPath, structure, featureName);
 }
+
 // Function to initialize the folder and file structure based on user settings.
 function getInitialStructure(
   featureName: string,
@@ -43,11 +44,11 @@ function getInitialStructure(
       repository: [`${featureName}_repository.dart`],
     },
     data: {
-      local: {}, // Placeholder for local data source files; initially empty.
       data_source: {
         remote: [`${featureName}_remote_data_source.dart`], // Predefined remote data source.
+        local: {}, // Initialize local data source object.
       },
-      models: {}, // Placeholder for models; initially empty.
+      models: [`${featureName}_model.dart`], // Predefined model file.
       repository: [`${featureName}_repository_impl.dart`], // Predefined repository implementation.
     },
     presentation: {
@@ -67,8 +68,7 @@ function getInitialStructure(
 
   // If Hive setting is enabled, add Hive-specific files.
   if (createHive) {
-    structure.data.models.hive_models = [`${featureName}_hive_model.dart`];
-    structure.data.data_source.local = {}; // Initialize local data source object.
+    structure.data.models.push(`${featureName}_hive_model.dart`);
     structure.data.data_source.local.hive_service = [
       `${featureName}_hive_service.dart`,
     ];
@@ -76,16 +76,10 @@ function getInitialStructure(
 
   // If Local Data Source setting is enabled, add local data source file.
   if (createLocalDataSource) {
-    structure.data.data_source.local = {}; // Initialize local data source object.
-    structure.data.data_source.local[""] = [
+    structure.data.data_source.local.local_service = [
       `${featureName}_local_data_source.dart`,
     ];
   }
-
-  // Basic model files are always included.
-  structure.data.models[featureName] = [`${featureName}_model.dart`];
-
-  // If Injection Container setting is enabled, add injection container file.
 
   return structure;
 }
