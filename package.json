@@ -100,6 +100,11 @@
           "type": "boolean",
           "default": false,
           "description": "Add local data source to the feature."
+        },
+        "flutterGenius.export.uiGenerationEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable to automatically generate UI files for the feature."
         }
       }
     }
