@@ -33,6 +33,18 @@ export function createExportCommand() {
           writeExportsToFile(outputFilePath, allExports);
 
           dartFiles.forEach((file) => {
+            if (
+              file.includes("exports.dart") ||
+              file.includes(".g.dart") ||
+              file.includes(".freezed.dart") ||
+              file.includes("l10n.dart") ||
+              file.includes("\\intl") ||
+              file.includes(".gen.dart") ||
+              file.includes(".gr.dart")
+            ) {
+              return;
+            }
+
             prependExportLine(file, projectName);
           });
 
@@ -92,25 +104,28 @@ function writeExportsToFile(
 
 // Function to prepend export line to a Dart file
 function prependExportLine(filePath: string, projectName: string): void {
-  const checkString = "exports.dart';";
   const exportLine = `import 'package:${projectName}/core/common/exports.dart';\n`;
 
   // Read the existing content of the file
   const fileContent = fs.readFileSync(filePath, "utf8");
 
-  // Check if the export line already exists
-  if (!fileContent.startsWith(exportLine)) {
+  // Check if the export line already exists anywhere in the file
+  if (!fileContent.includes(exportLine.trim())) {
     // Prepend the export line to the content
     const newContent = exportLine + fileContent;
 
     // Write the new content back to the file
     fs.writeFileSync(filePath, newContent, "utf8");
   }
+}
 
-  // function to remove duplicate lines form exports.dart file
-  function removeDuplicateLines(outputFilePath: string) {
-    const exportsFileContent = fs.readFileSync(outputFilePath, "utf8");
-    const uniqueExports = Array.from(new Set(exportsFileContent.split("\n")));
-    fs.writeFileSync(outputFilePath, uniqueExports.join("\n"), "utf8");
-  }
+// Function to remove duplicate lines from exports.dart file
+function removeDuplicateLines(outputFilePath: string): void {
+  const exportsFileContent = fs.readFileSync(outputFilePath, "utf8");
+
+  // Split the file into lines, remove duplicates, and join them back into a string
+  const uniqueExports = Array.from(new Set(exportsFileContent.split("\n")));
+
+  // Write the unique lines back to the file
+  fs.writeFileSync(outputFilePath, uniqueExports.join("\n"), "utf8");
 }

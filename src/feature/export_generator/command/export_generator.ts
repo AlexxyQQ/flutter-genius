@@ -26,20 +26,21 @@ export function getDartFiles(
       getDartFiles(filePath, fileList);
     }
     // If it's a .dart file and not a .g.dart file
-    else if (
-      file.endsWith(".dart") &&
-      (!file.endsWith(".g.dart") || file.endsWith(".freezed.dart"))
-    ) {
+    else if (file.endsWith(".dart")) {
       // If UI generation is disabled, skip files with /view, /page, or /ui in their path
       if (
         (!uiGenerationEnabled &&
           (filePath.includes("\\view") ||
             filePath.includes("\\page") ||
-            filePath.includes("\\ui"))) ||
-        filePath.includes("\\custom_widgets") ||
-        filePath.includes("\\custom_widget") ||
-        filePath.includes("\\widgets") ||
-        filePath.includes("\\widget")
+            filePath.includes("\\ui") ||
+            filePath.includes("\\custom_widgets") ||
+            filePath.includes("\\custom_widget") ||
+            filePath.includes("\\widgets") ||
+            filePath.includes("\\widget"))) ||
+        filePath.includes(".g.dart") ||
+        filePath.includes(".freezed.dart") ||
+        filePath.includes(".gr.dart") ||
+        filePath.includes("exports.dart")
       ) {
         return; // Skip this file
       }
