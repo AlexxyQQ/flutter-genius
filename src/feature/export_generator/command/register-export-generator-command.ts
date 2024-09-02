@@ -6,6 +6,7 @@ import { getDartFiles } from "./export_generator";
 import { findProjectName } from "../../../utils/get-app-name";
 import { checkExportedFilesExist } from "./export_validator";
 import { readSetting } from "../../../utils/read-settings";
+import { sortExports } from "./export_sorter";
 
 // Main function to create the export command
 export function createExportCommand() {
@@ -71,6 +72,8 @@ export function createExportCommand() {
               projectName
             );
           }
+          sortExports(outputFilePath, projectName);
+          removeDuplicateLines(outputFilePath);
           const terminal = vscode.window.createTerminal();
           terminal.sendText("flutter pub get");
           terminal.sendText("dart fix --apply");
@@ -138,13 +141,25 @@ function prependExportLine(filePath: string, projectName: string): void {
   }
 }
 
-// Function to remove duplicate lines from exports.dart file
+/**
+ * Removes duplicate lines from the given export file and writes back the unique lines.
+ * @param outputFilePath - Path to the exports.dart file.
+ */
 function removeDuplicateLines(outputFilePath: string): void {
-  const exportsFileContent = fs.readFileSync(outputFilePath, "utf8");
+  try {
+    // Read the file content
+    const exportsFileContent = fs.readFileSync(outputFilePath, "utf8");
 
-  // Split the file into lines, remove duplicates, and join them back into a string
-  const uniqueExports = Array.from(new Set(exportsFileContent.split("\n")));
+    // Split the content into lines, trim whitespace, and remove duplicates
+    const lines = exportsFileContent.split("\n");
+    const uniqueLines = Array.from(
+      new Set(lines.map((line) => line.trim())) // Trim each line to avoid issues with extra spaces
+    ).filter((line) => line !== ""); // Optional: Filter out any empty lines
 
-  // Write the unique lines back to the file
-  fs.writeFileSync(outputFilePath, uniqueExports.join("\n"), "utf8");
+    // Write the unique lines back to the file
+    fs.writeFileSync(outputFilePath, uniqueLines.join("\n"), "utf8");
+    console.log(`Duplicates removed from ${outputFilePath}`);
+  } catch (error) {
+    console.error(`Error processing file ${outputFilePath}:`, error);
+  }
 }
