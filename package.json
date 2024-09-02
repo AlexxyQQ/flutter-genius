@@ -110,6 +110,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable to automatically generate UI files for the feature."
+        },
+        "flutterGenius.export.removeDeadFilesFromExports": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable to automatically remove dead files from the exports file."
         }
       }
     }

@@ -4,6 +4,8 @@ import * as path from "path";
 import { getLibPath } from "../../generate_clean_code_arch/utils/check-lib-folder";
 import { getDartFiles } from "./export_generator";
 import { findProjectName } from "../../../utils/get-app-name";
+import { checkExportedFilesExist } from "./export_validator";
+import { readSetting } from "../../../utils/read-settings";
 
 // Main function to create the export command
 export function createExportCommand() {
@@ -52,6 +54,23 @@ export function createExportCommand() {
           vscode.window.showInformationMessage(
             "Export statement added successfully. Running dart fix --apply command..."
           );
+
+          console.log(
+            "outputFilePath" + outputFilePath,
+            "rootFolderPath" + targetDirectory,
+            "projectName" + projectName
+          );
+          const removeDeadFilesExport = readSetting(
+            "export.removeDeadFilesFromExports"
+          );
+
+          if (removeDeadFilesExport) {
+            await checkExportedFilesExist(
+              outputFilePath,
+              targetDirectory,
+              projectName
+            );
+          }
           const terminal = vscode.window.createTerminal();
           terminal.sendText("flutter pub get");
           terminal.sendText("dart fix --apply");
