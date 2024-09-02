@@ -13,6 +13,7 @@ export function createFeatureStructure(basePath: string, featureName: string) {
   const createInjectionContainer = true;
   const createCubit = readSetting("feature.createCubit");
   const createLocalDataSource = readSetting("feature.localDataSource");
+  const createBloc = readSetting("feature.createBloc");
 
   // Construct the path for the new feature directory.
   const featureDirPath = path.join(basePath, featureName);
@@ -22,11 +23,15 @@ export function createFeatureStructure(basePath: string, featureName: string) {
     featureName,
     createHive,
     createCubit,
-    createLocalDataSource
+    createLocalDataSource,
+    createBloc
   );
 
   // Recursively create the directory and file structure.
   generateStructure(featureDirPath, structure, featureName);
+
+  // Run Export command
+  vscode.commands.executeCommand("flutter-genius.createExportFile");
 }
 
 // Function to initialize the folder and file structure based on user settings.
@@ -34,7 +39,8 @@ function getInitialStructure(
   featureName: string,
   createHive: boolean,
   createCubit: boolean,
-  createLocalDataSource: boolean
+  createLocalDataSource: boolean,
+  createBloc: boolean
 ) {
   // Define the base structure object with predefined directories and files.
   let structure: any = {
@@ -62,6 +68,13 @@ function getInitialStructure(
   if (createCubit) {
     structure.presentation.cubit = [
       `${featureName}_cubit.dart`,
+      `${featureName}_state.dart`,
+    ];
+  }
+  if (createBloc) {
+    structure.presentation.bloc = [
+      `${featureName}_bloc.dart`,
+      `${featureName}_event.dart`,
       `${featureName}_state.dart`,
     ];
   }

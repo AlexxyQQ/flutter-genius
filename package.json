@@ -12,7 +12,7 @@
     "type": "git",
     "url": "https://github.com/AlexxyQQ/flutter-genius"
   },
-  "version": "0.0.2",
+  "version": "0.1.1",
   "engines": {
     "vscode": "^1.87.0"
   },
@@ -93,8 +93,13 @@
         },
         "flutterGenius.feature.createCubit": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Add Cubit support to the feature."
+        },
+        "flutterGenius.feature.createBloc": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add Bloc with event and state support to the feature."
         },
         "flutterGenius.feature.localDataSource": {
           "type": "boolean",
