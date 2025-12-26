@@ -52,6 +52,10 @@
         "title": "Flutter Genius: Add Feature"
       },
       {
+      "command": "dart-entity-mapper.generateMapper",
+      "title": "Flutter Genius: Generate Entity to Model"
+    },
+      {
         "command": "flutter-genius.createCleanCodeFolderStructure",
         "title": "Flutter Genius: Create Clean Code Folder Structure"
       },
