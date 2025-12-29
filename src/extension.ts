@@ -1,19 +1,48 @@
-import * as vscode from "vscode";
-import { registerAddFeatureCommand } from "./feature/add_feature/commands/register-add-feature-command";
-import { createGenerateCleanCodeFolderStructureCommand } from "./feature/generate_clean_code_arch/commands/register-gen-clean-code-folder-structure-command";
-import { convertJsonToDartCommand } from "./feature/dart_class_generator/register-convert-json-to-dart-command";
-import { createExportCommand } from "./feature/export_generator/command/register-export-generator-command";
+import * as vscode from 'vscode';
+import { generateEntityToModelCommand } from './commands/generate_mapper';
+import { extractLocalizationCommand } from './commands/extract_localization';
+import { extractLocalizationAggressiveCommand } from './commands/extract_localization_aggressive';
+import { createBlocCommand } from './commands/create_bloc';
+import { addSizeExtensionCommand } from './commands/add_size_extension';
 
+/**
+ * This method is called when your extension is activated.
+ * Your extension is activated the very first time the command is executed.
+ */
 export function activate(context: vscode.ExtensionContext) {
-  var addFeature = registerAddFeatureCommand();
-  var generateCleanCodeFolderStructure =
-    createGenerateCleanCodeFolderStructureCommand();
-  var convertJsonToDart = convertJsonToDartCommand();
-  var generateExport = createExportCommand();
-  context.subscriptions.push(addFeature);
-  context.subscriptions.push(generateCleanCodeFolderStructure);
-  context.subscriptions.push(convertJsonToDart);
-  context.subscriptions.push(generateExport);
+    console.log('Dart Entity Mapper is now active!');
+
+    // Register the command logic separated in the commands folder
+    let disposable = vscode.commands.registerCommand(
+        'flutter-genius.generateMapper', 
+        generateEntityToModelCommand
+    );
+    
+    let locDisposable = vscode.commands.registerCommand(
+        'flutter-genius.extractLocalization', // Ensure this ID matches package.json
+        extractLocalizationCommand
+    );
+
+    let locAggressiveDisposable = vscode.commands.registerCommand(
+        'flutter-genius.extractLocalizationAggressive',
+        extractLocalizationAggressiveCommand
+    );
+
+    let createBlocDisposable = vscode.commands.registerCommand(
+        'flutter-genius.createBloc', 
+        (uri: vscode.Uri) => createBlocCommand(uri)
+    );
+
+    let sizeExtDisposable = vscode.commands.registerCommand(
+        'flutter-genius.addSizeExtension', 
+        addSizeExtensionCommand
+    );
+
+    context.subscriptions.push(sizeExtDisposable);
+    context.subscriptions.push(createBlocDisposable);
+    context.subscriptions.push(locAggressiveDisposable);
+    context.subscriptions.push(locDisposable);
+    context.subscriptions.push(disposable);
 }
 
 export function deactivate() {}

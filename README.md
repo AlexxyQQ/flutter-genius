@@ -2,66 +2,133 @@
 
 ## Description
 
-FlutterGenius is a powerful extension for Flutter developers that streamlines the process of creating clean code folder structures, adding new features with automated folder structure generation, and converting JSON data to Dart classes seamlessly. With FlutterGenius, you can boost your productivity and focus more on building amazing Flutter applications rather than spending time on repetitive tasks.
+FlutterGenius is a productivity extension for Flutter developers using **Clean Architecture** and **BLoC**. It automates repetitive boilerplate tasks such as generating data models from entities, creating BLoC structures with Freezed, extracting hardcoded strings for localization, and refactoring UI code for cleaner responsiveness.
 
 ## Features
 
-- **Clean Code Folder Structure**: Quickly create organized folder structures for your Flutter applications with just a few clicks.
-- **Automated Feature Generation**: Add new features to your Flutter app effortlessly, and let FlutterGenius generate the necessary folder structure and files for you.\*\*\*\*
-- **JSON to Dart Class Conversion**: Convert JSON data to Dart classes effortlessly, saving you time and effort in manual data modeling.
+- **Entity to Model Mapper**: Instantly generate a `Freezed` data model from a Clean Architecture `Entity` class.
+- **Bloc Generator**: Create a full BLoC feature (Bloc, Event, State) using `Freezed` and `Equatable` via the context menu.
+- **Smart Localization (AppText)**: Automatically extract strings wrapped in `AppText(...)` to your JSON translation file.
+- **Aggressive Localization**: Select a folder to scan and extract _all_ hardcoded strings, converting them to `easy_localization` keys.
+- **Size Extension & Refactor**: Auto-injects a responsive sizing extension and refactors your `SizedBox`, `Padding`, and `BorderRadius` code to use cleaner, fluent syntax.
+
+---
 
 ## Usage
 
-1. **Clean Code Folder Structure**:
+### 1. Entity to Model Mapper (Freezed)
 
-   - Open your Flutter project in Visual Studio Code.
-   - Use the FlutterGenius command to create a clean code folder structure.
+Convert your Domain Entities into Data Models with zero typing.
 
-   #### NOTE:
+1.  Open a Dart file containing your entity (e.g., `user_entity.dart`).
+2.  Place your cursor anywhere inside the class definition.
+3.  Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
+4.  Run: **Dart: Generate Entity to Model**.
 
-   1. In `lib\core\common\export.dart` file change the `YOUR_PROJECT_NAME` to your project name.
-   2. After creating the folder structure you must add the following lines to your `pubspec.yaml` file to use the generated folder structure.
+**What Happens:**
 
-   ```yaml
-   #dependencies
-   flutter_screenutil: ^5.9.0
-   flutter_bloc: ^8.1.4
-   flutter_svg: ^2.0.10+1
-   hive_flutter: ^1.1.0
-   path_provider: ^2.1.2
-   get_it: ^7.6.7
-   dartz: ^0.10.1
-   flutter_localizations:
-     sdk: flutter
-   connectivity_plus: ^6.0.3
-   intl: ^0.18.1
-   pretty_dio_logger: ^1.3.1
-   dio: ^5.4.3+1
+- Detects the class name (e.g., `UserEntity`).
+- Creates a new file in `data/models/user_model.dart`.
+- Generates `UserEntity` -> `UserModel` mapping logic (`toEntity`, `fromEntity`).
+- Generates standard `Freezed` boilerplate (`fromJson`, `toJson`).
 
-   #dev_dependencies
-   flutter_lints: ^3.0.2
-   build_runner: ^2.4.8
-   hive_generator: ^2.0.1
-   flutter_gen: ^5.4.0
+### 2. Create BLoC (Freezed)
 
-   # Add this at the end of the file
-   flutter_intl:
-     enabled: true
-     class_name: I10n
-     main_locale: en
-     arb_dir: lib/core/localization/l10n
-     output_dir: lib/core/localization/generated
-   ```
+Generate a complete BLoC structure with standard imports and boilerplate.
 
-2. **Automated Feature Generation**:
+1.  Right-click on any folder in your file explorer.
+2.  Select **Create BLoC (Freezed)**.
+3.  Enter the name of your BLoC (e.g., `Login`).
 
-   - Open your Flutter project in Visual Studio Code.
-   - Use the FlutterGenius command to add a new feature.
-   - Follow the prompts to specify the feature details.
-   - FlutterGenius will generate the necessary folder structure and files for the new feature automatically.
+**What Happens:**
 
-3. **JSON to Dart Class Conversion**:
-   - Open your Flutter project in Visual Studio Code.
-   - Use the FlutterGenius command to convert JSON data to Dart classes.
-   - Paste your JSON data or provide the JSON file path.
-   - FlutterGenius will generate Dart classes based on the JSON data.
+- Creates a folder named `login_bloc`.
+- Generates 3 files: `login_bloc.dart`, `login_event.dart`, and `login_state.dart`.
+- Sets up `Equatable` for events and `Freezed` for state management.
+
+### 3. Localization Extractor (AppText Only)
+
+Ideal for maintaining existing projects using a custom `AppText` widget.
+
+1.  Open the Command Palette.
+2.  Run: **Dart: Extract AppText to Localization**.
+
+**What Happens:**
+
+- Scans `lib/` for usage of `AppText("String")`.
+- Adds the key/value to `assets/translations/en-GB.json`.
+- Replaces code with `AppText(LocaleKeys.generated_key)`.
+- automatically runs `easy_localization:generate` to update your generated keys file.
+
+### 4. Aggressive Localization (Targeted)
+
+Best for localizing a new feature or cleaning up technical debt.
+
+1.  Open the Command Palette.
+2.  Run: **Dart: Extract Localization (Aggressive - Select Folder)**.
+3.  Select the folder you want to clean (e.g., `lib/features/profile`).
+
+**What Happens:**
+
+- Scans **all** string literals (e.g., `'Profile'`, `"Settings"`).
+- Intelligent filtering: Skips assets, imports, Map keys, and technical strings.
+- Adds keys to `assets/translations/en-GB.json`.
+- Replaces code with `LocaleKeys.generated_key.tr()`.
+
+---
+
+### 5. Smart Size Extensions & Refactor
+
+**Refactor your entire codebase to use cleaner, fluent UI syntax.**
+
+1.  Open the Command Palette.
+2.  Run: **Flutter: Add Size Extension & Refactor UI**.
+
+#### ⚠️ What will happen?
+
+1.  **Dependency Check**: The extension checks `pubspec.yaml` for `flutter_screenutil`. If missing, it asks you to add it.
+2.  **File Creation**: It creates a new file at:  
+    `lib/core/common/presentation/extensions/size/app_size_extension.dart`  
+    This file contains the logic for `.horizontalGap`, `.allPadding`, etc.
+3.  **Global Scan**: It scans every `.dart` file in your `lib/` folder.
+4.  **Refactoring**: It replaces verbose Flutter widgets with the new extension syntax.
+
+#### 🔄 What exactly will change?
+
+| Widget Type         | Before (Old Code)                                                 | After (Refactored Code) |
+| :------------------ | :---------------------------------------------------------------- | :---------------------- |
+| **Gaps (SizedBox)** | `SizedBox(width: 10)` <br> `SizedBox(width: 10.w)`                | `10.horizontalGap`      |
+|                     | `SizedBox(height: 20)` <br> `SizedBox(height: 20.h)`              | `20.verticalGap`        |
+| **Padding**         | `EdgeInsets.all(16)`                                              | `16.allPadding`         |
+|                     | `EdgeInsets.symmetric(horizontal: 12)`                            | `12.horizontalPadding`  |
+|                     | `EdgeInsets.symmetric(vertical: 8)`                               | `8.verticalPadding`     |
+|                     | `EdgeInsets.only(bottom: 10)`                                     | `10.bottomOnly`         |
+|                     | `EdgeInsets.only(top: 10)`                                        | `10.topOnly`            |
+|                     | `EdgeInsets.only(left: 10)`                                       | `10.leftOnly`           |
+|                     | `EdgeInsets.only(right: 10)`                                      | `10.rightOnly`          |
+| **Border Radius**   | `BorderRadius.circular(15)`                                       | `15.rounded`            |
+|                     | `Radius.circular(15)`                                             | `15.circular`           |
+| **Shape**           | `RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))` | `12.roundShape`         |
+
+> **Note**: The extension automatically adds the necessary import to `app_size_extension.dart` in every file it modifies.
+
+---
+
+## Requirements
+
+To use the generated code effectively, your `pubspec.yaml` should include the following dependencies:
+
+```yaml
+dependencies:
+  flutter_bloc: ^8.1.0
+  freezed_annotation: ^2.4.0
+  json_annotation: ^4.8.0
+  equatable: ^2.0.5
+  easy_localization: ^3.0.0
+  flutter_screenutil: ^5.9.0
+
+dev_dependencies:
+  build_runner: ^2.4.0
+  freezed: ^2.4.0
+  json_serializable: ^6.7.0
+```
