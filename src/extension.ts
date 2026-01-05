@@ -5,6 +5,7 @@ import { extractLocalizationAggressiveCommand } from "./commands/extract_localiz
 import { createBlocCommand } from "./commands/create_bloc";
 import { addSizeExtensionCommand } from "./commands/add_size_extension";
 import { convertEnumToJsonEnumCommand } from "./commands/convert_enum_command";
+import { extractClassesCommand } from "./commands/extract_classes";
 
 /**
  * This method is called when your extension is activated.
@@ -43,8 +44,14 @@ export function activate(context: vscode.ExtensionContext) {
     "flutter-genius.convertEnum",
     convertEnumToJsonEnumCommand
   );
-  context.subscriptions.push(enumDisposable);
 
+  let extractClasses = vscode.commands.registerCommand(
+    "flutter-genius.extractClasses", // Add this to package.json
+    () => extractClassesCommand()
+  );
+
+  context.subscriptions.push(extractClasses);
+  context.subscriptions.push(enumDisposable);
   context.subscriptions.push(sizeExtDisposable);
   context.subscriptions.push(createBlocDisposable);
   context.subscriptions.push(locAggressiveDisposable);

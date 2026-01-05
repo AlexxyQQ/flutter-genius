@@ -3,6 +3,7 @@ import * as path from "path";
 import { getClassAtPosition, extractFields } from "../utils/dart_parser";
 import { getRelativeImportPath, writeFile } from "../utils/file_manager";
 import { generateFreezedModelContent } from "../templates/freezed_model";
+import { generateFreezedEntityContent } from "../templates/freezed_entity"; // Import new template
 import { toSnakeCase } from "../utils/string_utils";
 import { analyzeTypeForEnum } from "../utils/enum_detector";
 
@@ -17,6 +18,7 @@ export async function generateEntityToModelCommand() {
   // 1. Detect Class
   const cursorPosition = editor.selection.active;
   const classInfo = getClassAtPosition(document, cursorPosition);
+
   if (!classInfo) {
     vscode.window.showErrorMessage(
       "No class found at current cursor position."
@@ -24,7 +26,8 @@ export async function generateEntityToModelCommand() {
     return;
   }
 
-  const { className, classBody } = classInfo;
+  const { className, classBody, isFreezed } = classInfo;
+
   if (!className.endsWith("Entity")) {
     vscode.window.showErrorMessage(
       `Selected class "${className}" must end in "Entity".`
@@ -32,7 +35,63 @@ export async function generateEntityToModelCommand() {
     return;
   }
 
-  // 2. Prepare Paths & Directories
+  // 2. Extract Fields (Handles both Normal and Freezed via updated parser)
+  let fields = extractFields(classBody, isFreezed);
+
+  if (fields.length === 0) {
+    vscode.window.showErrorMessage(`No fields found in ${className}.`);
+    return;
+  }
+
+  // 3. ENUM DETECTION (Same as before)
+  const unannotatedEnums: string[] = [];
+  fields = await Promise.all(
+    fields.map(async (field) => {
+      if (
+        !field.isList &&
+        !field.isMap &&
+        !field.isEntity &&
+        !["String", "int", "double", "bool", "DateTime"].includes(
+          field.cleanType
+        )
+      ) {
+        const analysis = await analyzeTypeForEnum(field.cleanType);
+        if (analysis.isEnum) {
+          field.isEnum = true;
+          if (analysis.hasAnnotation && analysis.converterName) {
+            field.converterName = analysis.converterName;
+          } else {
+            unannotatedEnums.push(field.cleanType);
+          }
+        }
+      }
+      return field;
+    })
+  );
+
+  // ---------------------------------------------------------
+  // 4. IF NORMAL CLASS -> CONVERT TO FREEZED ENTITY (IN PLACE)
+  // ---------------------------------------------------------
+  if (!isFreezed) {
+    const fileName = path.basename(filePath);
+    const newEntityContent = generateFreezedEntityContent(
+      className,
+      fileName,
+      fields
+    );
+
+    // Write to the CURRENT file
+    await writeFile(filePath, newEntityContent);
+
+    // Provide immediate feedback about the conversion
+    vscode.window.showInformationMessage(
+      `Converted ${className} to Freezed Entity! (Run build_runner)`
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 5. PREPARE MODEL PATHS
+  // ---------------------------------------------------------
   let modelDir = "";
   if (entityDir.includes(path.join("domain", "entities"))) {
     modelDir = entityDir.replace(
@@ -45,50 +104,6 @@ export async function generateEntityToModelCommand() {
     modelDir = path.join(path.dirname(entityDir), "data", "models");
   }
 
-  // 3. Extract Fields
-  let fields = extractFields(classBody);
-  if (fields.length === 0) {
-    vscode.window.showErrorMessage(`No final fields found in ${className}.`);
-    return;
-  }
-
-  // --- NEW: ASYNC ENUM DETECTION ---
-  const unannotatedEnums: string[] = [];
-  const extraImports: string[] = [];
-
-  // We must await the analysis of all fields
-  fields = await Promise.all(
-    fields.map(async (field) => {
-      // Skip basic types and generic containers
-      if (
-        !field.isList &&
-        !field.isMap &&
-        !field.isEntity &&
-        !["String", "int", "double", "bool", "DateTime"].includes(
-          field.cleanType
-        )
-      ) {
-        const analysis = await analyzeTypeForEnum(field.cleanType);
-
-        if (analysis.isEnum) {
-          field.isEnum = true;
-
-          if (analysis.hasAnnotation && analysis.converterName) {
-            field.converterName = analysis.converterName;
-
-            // Optional: Track file path to add import later
-            // if (analysis.filePath) extraImports.push(analysis.filePath);
-          } else {
-            unannotatedEnums.push(field.cleanType);
-          }
-        }
-      }
-      return field;
-    })
-  );
-  // ---------------------------------
-
-  // 4. Determine File Names
   const snakeClassName = toSnakeCase(className);
   let baseName = snakeClassName;
   if (baseName.endsWith("_entity")) {
@@ -97,7 +112,7 @@ export async function generateEntityToModelCommand() {
   const modelFileName = `${baseName}_model.dart`;
   const targetPath = path.join(modelDir, modelFileName);
 
-  // 5. Generate Code
+  // 6. GENERATE MODEL CONTENT
   const modelClassName = className.replace("Entity", "Model");
   const relativeImportPath = getRelativeImportPath(modelDir, filePath);
 
@@ -109,17 +124,18 @@ export async function generateEntityToModelCommand() {
     fields
   );
 
-  // 6. Write File
+  // 7. WRITE MODEL FILE
   try {
     await writeFile(targetPath, fileContent);
+
+    // Open the new Model file
     const doc = await vscode.workspace.openTextDocument(targetPath);
     await vscode.window.showTextDocument(doc);
 
-    // 7. Feedback
     if (unannotatedEnums.length > 0) {
       const unique = [...new Set(unannotatedEnums)].join(", ");
       vscode.window.showInformationMessage(
-        `Generated! ℹ️ Note: Enums [${unique}] lack JsonEnum annotations.`
+        `Generated Model! ℹ️ Note: Enums [${unique}] lack JsonEnum annotations.`
       );
     } else {
       vscode.window.showInformationMessage(

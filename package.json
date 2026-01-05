@@ -12,7 +12,7 @@
     "type": "git",
     "url": "https://github.com/AlexxyQQ/flutter-genius"
   },
-  "version": "0.2.0",
+  "version": "0.2.2",
   "engines": {
     "vscode": "^1.87.0"
   },
@@ -69,7 +69,11 @@
       },
       {
         "command": "flutter-genius.convertEnum",
-        "title": "CFlutter Genius: convert to JsonEnum"
+        "title": "Flutter Genius: convert to JsonEnum"
+      },
+      {
+        "command": "flutter-genius.extractClasses",
+        "title": "Flutter Genius: Extract Classes to Files"
       }
     ],
     "menus": {
@@ -78,6 +82,48 @@
           "command": "flutter-genius.createBloc",
           "when": "explorerResourceIsFolder",
           "group": "navigation"
+        },
+        {
+          "command": "flutter-genius.extractLocalizationAggressive",
+          "when": "explorerResourceIsFolder",
+          "group": "modification"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "flutter-genius.generateMapper",
+          "group": "1_modification",
+          "when": "editorLangId == dart"
+        },
+        {
+          "command": "flutter-genius.extractClasses",
+          "group": "1_modification",
+          "when": "editorLangId == dart"
+        },
+        {
+          "command": "flutter-genius.convertEnum",
+          "group": "1_modification",
+          "when": "editorLangId == dart"
+        },
+        {
+          "command": "flutter-genius.extractLocalization",
+          "group": "1_modification",
+          "when": "editorLangId == dart"
+        },
+        {
+          "command": "flutter-genius.addSizeExtension",
+          "group": "1_modification",
+          "when": "editorLangId == dart"
+        },
+        {
+          "command": "flutter-genius.createBloc",
+          "group": "1_modification",
+          "when": "editorLangId == dart"
+        },
+        {
+          "command": "flutter-genius.extractLocalizationAggressive",
+          "group": "1_modification",
+          "when": "editorLangId == dart"
         }
       ]
     }
