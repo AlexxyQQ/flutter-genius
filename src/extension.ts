@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { generateEntityToModelCommand } from "./commands/generate_mapper";
+import { generateEntityToModelCommand } from "./commands/generate_entity_to_model";
 import { extractLocalizationCommand } from "./commands/extract_localization";
 import { extractLocalizationAggressiveCommand } from "./commands/extract_localization_aggressive";
 import { createBlocCommand } from "./commands/create_bloc";
@@ -49,6 +49,13 @@ export function activate(context: vscode.ExtensionContext) {
     "flutter-genius.extractClasses", // Add this to package.json
     () => extractClassesCommand()
   );
+
+  let ccdisposable = vscode.commands.registerCommand(
+    "flutter-genius.generateModel",
+    cccc
+  );
+
+  context.subscriptions.push(ccdisposable);
 
   context.subscriptions.push(extractClasses);
   context.subscriptions.push(enumDisposable);
