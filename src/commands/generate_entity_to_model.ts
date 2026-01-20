@@ -1,17 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import {
-  getClassAtPosition,
-  extractFields,
-  extractImports,
-} from "../utils/dart_parser";
-import {
-  getRelativeImportPath,
-  writeFile,
-  fixRelativeImport,
-} from "../utils/file_manager";
-import { generateNormalEntityContent } from "../templates/normal_entity";
-import { generateNormalModelContent } from "../templates/normal_model";
+import { getClassAtPosition, extractFields } from "../utils/dart_parser";
+import { getRelativeImportPath, writeFile } from "../utils/file_manager";
+import { generateFreezedModelContent } from "../templates/freezed_model";
+import { generateFreezedEntityContent } from "../templates/freezed_entity"; // Import new template
 import { toSnakeCase } from "../utils/string_utils";
 import { analyzeTypeForEnum } from "../utils/enum_detector";
 
@@ -22,14 +14,15 @@ export async function generateEntityToModelCommand() {
   const document = editor.document;
   const filePath = document.uri.fsPath;
   const entityDir = path.dirname(filePath);
-  const fullText = document.getText(); // Get full text to extract imports
 
   // 1. Detect Class
   const cursorPosition = editor.selection.active;
   const classInfo = getClassAtPosition(document, cursorPosition);
 
   if (!classInfo) {
-    vscode.window.showErrorMessage("No class found at cursor.");
+    vscode.window.showErrorMessage(
+      "No class found at current cursor position.",
+    );
     return;
   }
 
@@ -37,23 +30,20 @@ export async function generateEntityToModelCommand() {
 
   if (!className.endsWith("Entity")) {
     vscode.window.showErrorMessage(
-      `Class "${className}" must end in "Entity".`
+      `Selected class "${className}" must end in "Entity".`,
     );
     return;
   }
 
-  // 2. Extract Imports
-  const rawImports = extractImports(fullText);
-
-  // 3. Extract Fields
+  // 2. Extract Fields (Handles both Normal and Freezed via updated parser)
   let fields = extractFields(classBody, isFreezed);
 
   if (fields.length === 0) {
-    vscode.window.showErrorMessage(`No fields found.`);
+    vscode.window.showErrorMessage(`No fields found in ${className}.`);
     return;
   }
 
-  // 4. Enum Analysis
+  // 3. ENUM DETECTION (Same as before)
   const unannotatedEnums: string[] = [];
   fields = await Promise.all(
     fields.map(async (field) => {
@@ -61,8 +51,8 @@ export async function generateEntityToModelCommand() {
         !field.isList &&
         !field.isMap &&
         !field.isEntity &&
-        !["String", "int", "double", "bool", "DateTime", "dynamic"].includes(
-          field.cleanType
+        !["String", "int", "double", "bool", "DateTime"].includes(
+          field.cleanType,
         )
       ) {
         const analysis = await analyzeTypeForEnum(field.cleanType);
@@ -76,35 +66,37 @@ export async function generateEntityToModelCommand() {
         }
       }
       return field;
-    })
+    }),
   );
 
   // ---------------------------------------------------------
-  // 5. REGENERATE ENTITY
+  // 4. IF NORMAL CLASS -> CONVERT TO FREEZED ENTITY (IN PLACE)
   // ---------------------------------------------------------
-  const fileName = path.basename(filePath);
+  if (!isFreezed) {
+    const fileName = path.basename(filePath);
+    const newEntityContent = generateFreezedEntityContent(
+      className,
+      fileName,
+      fields,
+    );
 
-  // Pass existing imports to the entity generator
-  const newEntityContent = generateNormalEntityContent(
-    className,
-    fileName,
-    fields,
-    rawImports
-  );
+    // Write to the CURRENT file
+    await writeFile(filePath, newEntityContent);
 
-  await writeFile(filePath, newEntityContent);
-  vscode.window.showInformationMessage(
-    `Updated ${className} (preserved imports).`
-  );
+    // Provide immediate feedback about the conversion
+    vscode.window.showInformationMessage(
+      `Converted ${className} to Freezed Entity! (Run build_runner)`,
+    );
+  }
 
   // ---------------------------------------------------------
-  // 6. PREPARE MODEL PATHS
+  // 5. PREPARE MODEL PATHS
   // ---------------------------------------------------------
   let modelDir = "";
   if (entityDir.includes(path.join("domain", "entities"))) {
     modelDir = entityDir.replace(
       path.join("domain", "entities"),
-      path.join("data", "models")
+      path.join("data", "models"),
     );
   } else if (entityDir.includes("domain")) {
     modelDir = entityDir.replace("domain", path.join("data", "models"));
@@ -120,43 +112,34 @@ export async function generateEntityToModelCommand() {
   const modelFileName = `${baseName}_model.dart`;
   const targetPath = path.join(modelDir, modelFileName);
 
-  // ---------------------------------------------------------
-  // 7. FIX IMPORTS FOR MODEL
-  // ---------------------------------------------------------
-  // Since the Model is in a different folder, relative imports (../enums/x.dart)
-  // will break unless we recalculate them.
-  const modelImports = rawImports.map((imp) => {
-    return fixRelativeImport(imp, entityDir, modelDir);
-  });
-
-  // 8. Generate Model Content
+  // 6. GENERATE MODEL CONTENT
   const modelClassName = className.replace("Entity", "Model");
   const relativeImportPath = getRelativeImportPath(modelDir, filePath);
 
-  const modelContent = generateNormalModelContent(
+  const fileContent = generateFreezedModelContent(
     modelClassName,
     className,
     relativeImportPath,
     modelFileName,
     fields,
-    modelImports // Pass the recalculated imports
   );
 
-  // 9. Write Model File
+  // 7. WRITE MODEL FILE
   try {
-    await writeFile(targetPath, modelContent);
+    await writeFile(targetPath, fileContent);
+
+    // Open the new Model file
     const doc = await vscode.workspace.openTextDocument(targetPath);
     await vscode.window.showTextDocument(doc);
 
     if (unannotatedEnums.length > 0) {
-      vscode.window.showWarningMessage(
-        `Generated Model. Warning: Check Enums [${unannotatedEnums.join(
-          ", "
-        )}].`
+      const unique = [...new Set(unannotatedEnums)].join(", ");
+      vscode.window.showInformationMessage(
+        `Generated Model! ℹ️ Note: Enums [${unique}] lack JsonEnum annotations.`,
       );
     } else {
       vscode.window.showInformationMessage(
-        `Generated ${modelClassName} successfully.`
+        `Generated Freezed model: ${modelClassName}`,
       );
     }
   } catch (error: any) {

@@ -17,37 +17,37 @@ export function activate(context: vscode.ExtensionContext) {
   // Register the command logic separated in the commands folder
   let disposable = vscode.commands.registerCommand(
     "flutter-genius.generateMapper",
-    generateEntityToModelCommand
+    generateEntityToModelCommand,
   );
 
   let locDisposable = vscode.commands.registerCommand(
     "flutter-genius.extractLocalization", // Ensure this ID matches package.json
-    extractLocalizationCommand
+    extractLocalizationCommand,
   );
 
   let locAggressiveDisposable = vscode.commands.registerCommand(
     "flutter-genius.extractLocalizationAggressive",
-    extractLocalizationAggressiveCommand
+    extractLocalizationAggressiveCommand,
   );
 
   let createBlocDisposable = vscode.commands.registerCommand(
     "flutter-genius.createBloc",
-    (uri: vscode.Uri) => createBlocCommand(uri)
+    (uri: vscode.Uri) => createBlocCommand(uri),
   );
 
   let sizeExtDisposable = vscode.commands.registerCommand(
     "flutter-genius.addSizeExtension",
-    addSizeExtensionCommand
+    addSizeExtensionCommand,
   );
 
   let enumDisposable = vscode.commands.registerCommand(
     "flutter-genius.convertEnum",
-    convertEnumToJsonEnumCommand
+    convertEnumToJsonEnumCommand,
   );
 
   let extractClasses = vscode.commands.registerCommand(
     "flutter-genius.extractClasses", // Add this to package.json
-    () => extractClassesCommand()
+    () => extractClassesCommand(),
   );
 
   context.subscriptions.push(extractClasses);
