@@ -6,22 +6,31 @@ export interface ClassInfo {
   type: "class";
   className: string;
   classBody: string;
-  isFreezed: boolean; // Still useful to detect if we are migrating FROM freezed
+  isFreezed: boolean;
   start: number;
   end: number;
 }
 
 export interface FieldInfo {
-  type: string; // The raw type (e.g., "List<UserEntity>?")
-  name: string; // The variable name (e.g., "users")
-  isNullable: boolean; // true if ends with ?
-  isList: boolean; // true if List<...>
-  isMap: boolean; // true if Map<...>
-  isEntity: boolean; // true if type contains "Entity"
-  cleanType: string; // The inner type (e.g., "UserEntity")
-  defaultValue?: string; // e.g., "true", "10", "'test'"
-  isEnum?: boolean; // Detected via analysis
-  converterName?: string; // Custom JSON converter if needed
+  type: string;
+  name: string;
+  isNullable: boolean;
+  isList: boolean;
+  isMap: boolean;
+  isEntity: boolean;
+  cleanType: string;
+  defaultValue?: string;
+  isEnum?: boolean;
+  converterName?: string;
+}
+
+export interface DeclarationInfo {
+  type: "class" | "enum" | "mixin";
+  name: string;
+  body: string;
+  isFreezed: boolean;
+  start: number;
+  end: number;
 }
 
 // --- FUNCTIONS ---
@@ -78,7 +87,9 @@ export function getClassAtPosition(
   if (lengthOfClass === 0) return null;
 
   const classBody = textFromStart.substring(0, lengthOfClass);
-  const isFreezed = classBody.includes("@freezed") || classBody.includes("_$");
+  // Check for Freezed annotation or mixin
+  const isFreezed =
+    classBody.includes("@freezed") || classBody.includes("with _$");
 
   return {
     type: "class",
@@ -101,26 +112,64 @@ export function extractFields(
   const fields: FieldInfo[] = [];
 
   if (isFreezed) {
-    // ... (Your existing Freezed parsing logic here if needed for migration) ...
-    // For brevity, assuming we are parsing the Standard class style you provided
-  }
+    // --- FREEZED PARSING ---
+    // Look for: factory ClassName({ ... }) = _ClassName;
+    // We capture the content inside ({ ... })
+    const factoryRegex = /factory\s+\w+\s*\(\s*\{([^;]+)\}\s*\)/s;
+    const factoryMatch = classBody.match(factoryRegex);
 
-  // --- NORMAL CLASS PARSING ---
-  // Regex to find: final Type name;
-  const fieldRegex = /final\s+(.+?)\s+(\w+);/g;
+    if (factoryMatch) {
+      const paramsBlock = factoryMatch[1];
+      // Split by comma, but be careful of commas inside < > (generics)
+      // For simplicity, splitting by comma is usually safe for standard fields,
+      // but a more robust split handles nested Generics.
+      // Here we assume standard formatting.
+      const params = paramsBlock.split(",");
 
-  // Regex to find constructor defaults: this.name = value
-  // or named params: required this.name, this.age = 10
-  const defaults = extractDefaults(classBody);
+      for (const param of params) {
+        const cleaned = param.trim();
+        if (!cleaned) continue;
+        if (cleaned.startsWith("//")) continue;
 
-  let match;
-  while ((match = fieldRegex.exec(classBody)) !== null) {
-    const rawType = match[1].trim();
-    const name = match[2];
+        // 1. Extract Default Value: @Default(10)
+        let defaultValue: string | undefined;
+        const defaultMatch = cleaned.match(/@Default\(([^)]+)\)/);
+        if (defaultMatch) {
+          defaultValue = defaultMatch[1];
+        }
 
-    // Ignore internal fields starting with _
-    if (!name.startsWith("_")) {
-      fields.push(processField(rawType, name, defaults[name]));
+        // 2. Clean up annotations and 'required' keyword
+        // Remove @Default(...), @JsonKey(...), required
+        const noAnnotations = cleaned
+          .replace(/@Default\([^)]+\)/g, "") // Remove @Default
+          .replace(/@\w+(\([^)]*\))?/g, "") // Remove other annotations like @JsonKey
+          .replace(/^required\s+/, "") // Remove required
+          .trim();
+
+        // 3. Extract Type and Name
+        // Expected format: "String name" or "List<String> items"
+        const lastSpaceIndex = noAnnotations.lastIndexOf(" ");
+        if (lastSpaceIndex === -1) continue;
+
+        const rawType = noAnnotations.substring(0, lastSpaceIndex).trim();
+        const name = noAnnotations.substring(lastSpaceIndex + 1).trim();
+
+        fields.push(processField(rawType, name, defaultValue));
+      }
+    }
+  } else {
+    // --- NORMAL CLASS PARSING ---
+    const fieldRegex = /final\s+(.+?)\s+(\w+);/g;
+    const defaults = extractDefaults(classBody);
+
+    let match;
+    while ((match = fieldRegex.exec(classBody)) !== null) {
+      const rawType = match[1].trim();
+      const name = match[2];
+
+      if (!name.startsWith("_")) {
+        fields.push(processField(rawType, name, defaults[name]));
+      }
     }
   }
 
@@ -133,10 +182,6 @@ export function extractFields(
  */
 function extractDefaults(classBody: string): Record<string, string> {
   const defaults: Record<string, string> = {};
-
-  // Matches: this.myField = 10
-  // Matches: this.myStr = 'hello'
-  // Note: This is a simple regex, might fail on complex multi-line constructors
   const defaultRegex = /this\.(\w+)\s*=\s*([^,)]+)/g;
 
   let match;
@@ -149,7 +194,7 @@ function extractDefaults(classBody: string): Record<string, string> {
 }
 
 /**
- * analyzes the type string to determine properties (List, Map, Entity, Nullable)
+ * Analyzes the type string to determine properties (List, Map, Entity, Nullable)
  */
 function processField(
   rawType: string,
@@ -165,18 +210,13 @@ function processField(
 
   let cleanType = rawType;
 
-  // Unwrap List<Type> -> Type
   if (isList) {
     const listMatch = rawType.match(/List<(.+)>/);
     if (listMatch) cleanType = listMatch[1].replace(/\?$/, "");
-  }
-  // Unwrap Map<Key, Value> -> Value
-  else if (isMap) {
+  } else if (isMap) {
     const mapMatch = rawType.match(/Map\s*<.+?,\s*(.+)>/);
     if (mapMatch) cleanType = mapMatch[1].replace(/>\??$/, "");
-  }
-  // Unwrap Nullable? -> Nullable
-  else {
+  } else {
     if (isNullable) cleanType = cleanType.substring(0, cleanType.length - 1);
   }
 
@@ -190,4 +230,67 @@ function processField(
     cleanType: cleanType.trim(),
     defaultValue,
   };
+}
+
+export function extractImports(text: string): string[] {
+  const lines = text.split("\n");
+  const imports: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("import ")) {
+      imports.push(trimmed);
+    }
+  }
+  return imports;
+}
+
+/**
+ * Scans the document for ALL Classes, Enums, and Mixins.
+ */
+export function getAllDeclarations(text: string): DeclarationInfo[] {
+  const declarations: DeclarationInfo[] = [];
+  const declRegex = /(class|enum|mixin)\s+(\w+)/g;
+  let match;
+
+  while ((match = declRegex.exec(text)) !== null) {
+    const type = match[1] as "class" | "enum" | "mixin";
+    const name = match[2];
+    const startIndex = match.index;
+
+    const openBraceIndex = text.indexOf("{", startIndex);
+    if (openBraceIndex === -1) continue;
+
+    let openBraces = 1;
+    let endIndex = -1;
+
+    for (let i = openBraceIndex + 1; i < text.length; i++) {
+      if (text[i] === "{") {
+        openBraces++;
+      } else if (text[i] === "}") {
+        openBraces--;
+      }
+
+      if (openBraces === 0) {
+        endIndex = i + 1;
+        break;
+      }
+    }
+
+    if (endIndex !== -1) {
+      const body = text.substring(startIndex, endIndex);
+      const isFreezed = body.includes(`_$${name}`) || text.includes("@freezed");
+
+      declarations.push({
+        type: type,
+        name: name,
+        body: body,
+        isFreezed,
+        start: startIndex,
+        end: endIndex,
+      });
+    }
+  }
+
+  return declarations;
 }

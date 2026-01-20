@@ -3,46 +3,48 @@ import { FieldInfo } from "../utils/dart_parser";
 export function generateNormalEntityContent(
   className: string,
   fileName: string,
-  fields: FieldInfo[]
+  fields: FieldInfo[],
+  imports: string[] // <--- NEW PARAMETER
 ): string {
   const baseName = fileName.replace(".dart", "");
 
-  // 1. Generate Fields
+  // 1. Clean Imports
+  // Remove freezed annotation if present, remove the old .g.dart or .freezed.dart
+  const cleanImports = imports
+    .filter((i) => !i.includes("freezed_annotation"))
+    .filter((i) => !i.includes(".freezed.dart"))
+    .filter((i) => !i.includes(".g.dart"))
+    .join("\n");
+
+  // 2. Generate Fields
   const fieldDeclarations = fields
     .map((f) => {
-      // Add annotations if needed (e.g. custom converters for Enums)
       const annotation =
         f.isEnum && f.converterName ? `  @${f.converterName}()\n` : "";
       return `${annotation}  final ${f.type} ${f.name};`;
     })
     .join("\n");
 
-  // 2. Generate Constructor Parameters
+  // 3. Generate Constructor
   const constructorParams = fields
     .map((f) => {
       let param = "";
-
-      // If default exists: this.x = val
       if (f.defaultValue) {
         param = `    this.${f.name} = ${f.defaultValue},`;
-      }
-      // If nullable: this.x
-      else if (f.isNullable) {
+      } else if (f.isNullable) {
         param = `    this.${f.name},`;
-      }
-      // If required: required this.x
-      else {
+      } else {
         param = `    required this.${f.name},`;
       }
       return param;
     })
     .join("\n");
 
-  // 3. Generate toString()
+  // 4. Generate toString
   const toStringFields = fields.map((f) => `${f.name}: $${f.name}`).join(", ");
 
   return `import 'package:copy_with_extension/copy_with_extension.dart';
-// TODO: Add imports for Enums or Nested Entities here
+${cleanImports}
 
 part '${baseName}.g.dart';
 

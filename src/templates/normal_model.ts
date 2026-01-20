@@ -3,18 +3,25 @@ import { FieldInfo } from "../utils/dart_parser";
 export function generateNormalModelContent(
   modelClassName: string,
   entityClassName: string,
-  importPath: string, // Path to the entity file
+  entityImportPath: string,
   modelFileName: string,
-  fields: FieldInfo[]
+  fields: FieldInfo[],
+  imports: string[] // <--- NEW PARAMETER
 ): string {
   const baseName = modelFileName.replace(".dart", "");
 
-  // Helper to swap "Entity" with "Model" in types
-  // e.g., "List<UserEntity>?" => "List<UserModel>?"
+  // 1. Clean Imports for Model
+  // We need json_annotation. We don't need freezed.
+  // We filtering out the imports that might cause conflicts or circular deps if not careful
+  const cleanImports = imports
+    .filter((i) => !i.includes("freezed_annotation"))
+    .filter((i) => !i.includes(".freezed.dart"))
+    .filter((i) => !i.includes(".g.dart"))
+    .join("\n");
+
   const toModelType = (type: string) => type.replace(/Entity/g, "Model");
 
-  // 1. Generate Overrides for Getters (Only for Nested Entities)
-  // We need to cast the parent field to the Model type
+  // 2. Overrides
   const overrides = fields
     .filter((f) => f.isEntity)
     .map((f) => {
@@ -24,25 +31,16 @@ export function generateNormalModelContent(
     })
     .join("\n");
 
-  // 2. Generate Constructor
+  // 3. Constructor
   const constructorParams = fields
     .map((f) => {
-      // If it is an Entity (nested), we must require the Model version in the constructor
       if (f.isEntity) {
         const modelType = toModelType(f.type);
-        // e.g. required InnerModel super.inner
-        // or InnerModel? super.inner
         const prefix = f.isNullable || f.defaultValue ? "" : "required ";
-
         let param = `    ${prefix}${modelType} super.${f.name}`;
         if (f.defaultValue) param += ` = ${f.defaultValue}`;
-
         return param + ",";
       }
-
-      // Primitives / Enums
-      // e.g. required super.name
-      // e.g. super.name = "default"
       if (f.defaultValue) {
         return `    super.${f.name} = ${f.defaultValue},`;
       } else if (f.isNullable) {
@@ -53,21 +51,21 @@ export function generateNormalModelContent(
     })
     .join("\n");
 
-  // 3. Generate toString (Optional, usually Entity toString is enough, but requested in prompt)
   const toStringFields = fields.map((f) => `${f.name}: $${f.name}`).join(", ");
 
   return `import 'package:copy_with_extension/copy_with_extension.dart';
 import 'package:json_annotation/json_annotation.dart';
-import '${importPath}';
-// TODO: Add imports for Nested Models here
+import '${entityImportPath}';
+${cleanImports} 
+// Note: If you have nested Models, ensure they are imported here. 
+// The generator copies imports from the entity, but you might need to change 'Entity' imports to 'Model' imports manually if strict separation is required.
 
 part '${baseName}.g.dart';
 
 @CopyWith()
 @JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
 class ${modelClassName} extends ${entityClassName} {
-  
-  // --- Nested Object Overrides ---
+
 ${overrides}
 
   ${modelClassName}({

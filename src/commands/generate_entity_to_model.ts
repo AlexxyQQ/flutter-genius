@@ -1,8 +1,15 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { getClassAtPosition, extractFields } from "../utils/dart_parser";
-import { getRelativeImportPath, writeFile } from "../utils/file_manager";
-// Import NEW templates
+import {
+  getClassAtPosition,
+  extractFields,
+  extractImports,
+} from "../utils/dart_parser";
+import {
+  getRelativeImportPath,
+  writeFile,
+  fixRelativeImport,
+} from "../utils/file_manager";
 import { generateNormalEntityContent } from "../templates/normal_entity";
 import { generateNormalModelContent } from "../templates/normal_model";
 import { toSnakeCase } from "../utils/string_utils";
@@ -15,8 +22,9 @@ export async function generateEntityToModelCommand() {
   const document = editor.document;
   const filePath = document.uri.fsPath;
   const entityDir = path.dirname(filePath);
+  const fullText = document.getText(); // Get full text to extract imports
 
-  // 1. Detect Class at Cursor
+  // 1. Detect Class
   const cursorPosition = editor.selection.active;
   const classInfo = getClassAtPosition(document, cursorPosition);
 
@@ -34,20 +42,21 @@ export async function generateEntityToModelCommand() {
     return;
   }
 
-  // 2. Extract Fields
-  // We reuse the updated parser which handles Normal classes well
+  // 2. Extract Imports
+  const rawImports = extractImports(fullText);
+
+  // 3. Extract Fields
   let fields = extractFields(classBody, isFreezed);
 
   if (fields.length === 0) {
-    vscode.window.showErrorMessage(`No fields found in ${className}.`);
+    vscode.window.showErrorMessage(`No fields found.`);
     return;
   }
 
-  // 3. Detect Enums (For @Converter annotations)
+  // 4. Enum Analysis
   const unannotatedEnums: string[] = [];
   fields = await Promise.all(
     fields.map(async (field) => {
-      // Skip logic for primitives/maps/lists/entities
       if (
         !field.isList &&
         !field.isMap &&
@@ -62,7 +71,6 @@ export async function generateEntityToModelCommand() {
           if (analysis.hasAnnotation && analysis.converterName) {
             field.converterName = analysis.converterName;
           } else {
-            // Track enums that might need attention
             unannotatedEnums.push(field.cleanType);
           }
         }
@@ -72,25 +80,26 @@ export async function generateEntityToModelCommand() {
   );
 
   // ---------------------------------------------------------
-  // 4. REGENERATE ENTITY (To add @CopyWith and standard formatting)
+  // 5. REGENERATE ENTITY
   // ---------------------------------------------------------
-  // We always regenerate the entity to ensure it matches the
-  // CopyWithExtension requirements structure.
-
   const fileName = path.basename(filePath);
+
+  // Pass existing imports to the entity generator
   const newEntityContent = generateNormalEntityContent(
     className,
     fileName,
-    fields
+    fields,
+    rawImports
   );
 
   await writeFile(filePath, newEntityContent);
-  vscode.window.showInformationMessage(`Updated ${className} with @CopyWith!`);
+  vscode.window.showInformationMessage(
+    `Updated ${className} (preserved imports).`
+  );
 
   // ---------------------------------------------------------
-  // 5. PREPARE MODEL PATHS
+  // 6. PREPARE MODEL PATHS
   // ---------------------------------------------------------
-  // Logic to switch from /domain/entities -> /data/models
   let modelDir = "";
   if (entityDir.includes(path.join("domain", "entities"))) {
     modelDir = entityDir.replace(
@@ -100,13 +109,11 @@ export async function generateEntityToModelCommand() {
   } else if (entityDir.includes("domain")) {
     modelDir = entityDir.replace("domain", path.join("data", "models"));
   } else {
-    // Fallback: create ../data/models relative to current
     modelDir = path.join(path.dirname(entityDir), "data", "models");
   }
 
   const snakeClassName = toSnakeCase(className);
   let baseName = snakeClassName;
-  // Remove _entity suffix for the model filename (user_entity -> user_model.dart)
   if (baseName.endsWith("_entity")) {
     baseName = baseName.substring(0, baseName.length - "_entity".length);
   }
@@ -114,8 +121,15 @@ export async function generateEntityToModelCommand() {
   const targetPath = path.join(modelDir, modelFileName);
 
   // ---------------------------------------------------------
-  // 6. GENERATE MODEL CONTENT
+  // 7. FIX IMPORTS FOR MODEL
   // ---------------------------------------------------------
+  // Since the Model is in a different folder, relative imports (../enums/x.dart)
+  // will break unless we recalculate them.
+  const modelImports = rawImports.map((imp) => {
+    return fixRelativeImport(imp, entityDir, modelDir);
+  });
+
+  // 8. Generate Model Content
   const modelClassName = className.replace("Entity", "Model");
   const relativeImportPath = getRelativeImportPath(modelDir, filePath);
 
@@ -124,28 +138,25 @@ export async function generateEntityToModelCommand() {
     className,
     relativeImportPath,
     modelFileName,
-    fields
+    fields,
+    modelImports // Pass the recalculated imports
   );
 
-  // ---------------------------------------------------------
-  // 7. WRITE FILE & FEEDBACK
-  // ---------------------------------------------------------
+  // 9. Write Model File
   try {
     await writeFile(targetPath, modelContent);
-
-    // Open the new Model file for the user
     const doc = await vscode.workspace.openTextDocument(targetPath);
     await vscode.window.showTextDocument(doc);
 
-    // Warning about Missing Enum Annotations
     if (unannotatedEnums.length > 0) {
-      const unique = [...new Set(unannotatedEnums)].join(", ");
       vscode.window.showWarningMessage(
-        `Generated Model! Warning: Enums [${unique}] may need manual @JsonEnum / Converter setup.`
+        `Generated Model. Warning: Check Enums [${unannotatedEnums.join(
+          ", "
+        )}].`
       );
     } else {
       vscode.window.showInformationMessage(
-        `Generated ${modelClassName} successfully!`
+        `Generated ${modelClassName} successfully.`
       );
     }
   } catch (error: any) {

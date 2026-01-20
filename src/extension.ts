@@ -50,13 +50,6 @@ export function activate(context: vscode.ExtensionContext) {
     () => extractClassesCommand()
   );
 
-  let ccdisposable = vscode.commands.registerCommand(
-    "flutter-genius.generateModel",
-    cccc
-  );
-
-  context.subscriptions.push(ccdisposable);
-
   context.subscriptions.push(extractClasses);
   context.subscriptions.push(enumDisposable);
   context.subscriptions.push(sizeExtDisposable);
