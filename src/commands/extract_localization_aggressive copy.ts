@@ -42,6 +42,7 @@
 //   "AlertDialog",
 //   "ListTile",
 //   "showDialog",
+//   "CustomButton",
 // ]);
 // const TECH_FUNCTIONS = new Set([
 //   "print",
@@ -54,8 +55,8 @@
 // ]);
 
 // // Thresholds for sorting
-// const GLOBAL_THRESHOLD = 2; // Used in 3+ features -> common_words / common_sentences
-// const FEATURE_COMMON_THRESHOLD = 1; // Used in 2+ files inside ONE feature -> features.profile.common
+// const GLOBAL_THRESHOLD = 1; // Used in 2+ features -> common.words
+// const FEATURE_COMMON_THRESHOLD = 2; // Used in 2+ files inside ONE feature -> features.profile.common
 
 // // ========================== TYPES ==========================
 
@@ -64,7 +65,7 @@
 //   wordCount: number;
 //   locations: Array<{
 //     filePath: string;
-//     feature: string; // Top level folder inside lib/
+//     feature: string;
 //     relativePath: string;
 //   }>;
 // }
@@ -80,7 +81,7 @@
 //   }
 //   const rootPath = workspaceFolders[0].uri.fsPath;
 
-//   // 2. UTILS: Project Checks (Now with Error Messages)
+//   // 2. UTILS: Project Checks
 //   const packageName = getPackageName(rootPath);
 //   if (!packageName) {
 //     vscode.window.showErrorMessage(
@@ -100,28 +101,66 @@
 //     return;
 //   }
 
-//   const translationFileAbsPath = path.join(rootPath, TRANSLATIONS_PATH);
+//   // 3. SELECTION MENU: Current File or Folder?
+//   const selection = await vscode.window.showQuickPick(
+//     ["Current File", "Select Folder"],
+//     {
+//       placeHolder: "Where do you want to extract strings from?",
+//     },
+//   );
 
-//   // 3. Prompt User for Target Folder (Explicitly requested)
-//   const selectedFolder = await vscode.window.showOpenDialog({
-//     canSelectFiles: false,
-//     canSelectFolders: true,
-//     canSelectMany: false,
-//     openLabel: "Select Folder to Scan",
-//     defaultUri: vscode.Uri.file(path.join(rootPath, "lib")),
-//   });
+//   if (!selection) return;
 
-//   if (!selectedFolder || selectedFolder.length === 0) {
-//     return; // User cancelled
+//   let filesToScan: vscode.Uri[] = [];
+
+//   // --- OPTION A: CURRENT FILE ---
+//   if (selection === "Current File") {
+//     const editor = vscode.window.activeTextEditor;
+//     if (!editor) {
+//       vscode.window.showErrorMessage("❌ No file is currently open.");
+//       return;
+//     }
+//     const filePath = editor.document.uri.fsPath;
+//     if (!filePath.endsWith(".dart")) {
+//       vscode.window.showErrorMessage("❌ The open file is not a Dart file.");
+//       return;
+//     }
+//     if (!filePath.includes(path.join(rootPath, "lib"))) {
+//       vscode.window.showErrorMessage("❌ File must be inside the lib/ folder.");
+//       return;
+//     }
+//     filesToScan = [editor.document.uri];
+//   }
+//   // --- OPTION B: SELECT FOLDER ---
+//   else {
+//     const selectedFolder = await vscode.window.showOpenDialog({
+//       canSelectFiles: false,
+//       canSelectFolders: true,
+//       canSelectMany: false,
+//       openLabel: "Select Folder to Scan",
+//       defaultUri: vscode.Uri.file(path.join(rootPath, "lib")),
+//     });
+
+//     if (!selectedFolder || selectedFolder.length === 0) return;
+
+//     const targetFolderPath = selectedFolder[0].fsPath;
+//     if (!targetFolderPath.startsWith(rootPath)) {
+//       vscode.window.showErrorMessage(
+//         "❌ Please select a folder inside the current project.",
+//       );
+//       return;
+//     }
+
+//     const relativeSearchFolder = path.relative(rootPath, targetFolderPath);
+//     const globPattern = new vscode.RelativePattern(
+//       rootPath,
+//       `${relativeSearchFolder}/**/*.dart`,
+//     );
+//     filesToScan = await vscode.workspace.findFiles(globPattern, "**/*.g.dart");
 //   }
 
-//   const targetFolderPath = selectedFolder[0].fsPath;
-
-//   // Verify selection is inside the project
-//   if (!targetFolderPath.startsWith(rootPath)) {
-//     vscode.window.showErrorMessage(
-//       "❌ Please select a folder inside the current project.",
-//     );
+//   if (filesToScan.length === 0) {
+//     vscode.window.showInformationMessage("ℹ️ No Dart files found to process.");
 //     return;
 //   }
 
@@ -129,11 +168,13 @@
 //   vscode.window.withProgress(
 //     {
 //       location: vscode.ProgressLocation.Notification,
-//       title: "Smart Localization Sort...",
+//       title: "Smart Localization...",
 //       cancellable: false,
 //     },
 //     async (progress) => {
 //       try {
+//         const translationFileAbsPath = path.join(rootPath, TRANSLATIONS_PATH);
+
 //         // A. Load Existing Translations
 //         const jsonContent = fs
 //           .readFileSync(translationFileAbsPath, "utf8")
@@ -144,69 +185,58 @@
 //         // Build map of { "Existing Value" : "key.path" }
 //         let existingKeysMap = buildReverseIndex(translations);
 
-//         // B. Find Files
-//         const relativeSearchFolder = path.relative(rootPath, targetFolderPath);
-//         const globPattern = new vscode.RelativePattern(
-//           rootPath,
-//           `${relativeSearchFolder}/**/*.dart`,
-//         );
-//         const files = await vscode.workspace.findFiles(
-//           globPattern,
-//           "**/*.g.dart",
-//         );
-
-//         if (files.length === 0) {
-//           vscode.window.showInformationMessage(
-//             "ℹ️ No Dart files found in selection.",
-//           );
-//           return;
-//         }
-
-//         // C. PASS 1: ANALYSIS (Scan & Count)
+//         // B. PASS 1: ANALYSIS (Scan & Count)
 //         const stringUsageMap = new Map<string, StringStats>();
-//         progress.report({ message: `Analyzing ${files.length} files...` });
+//         progress.report({
+//           message: `Analyzing ${filesToScan.length} files...`,
+//         });
 
-//         for (const fileUri of files) {
+//         for (const fileUri of filesToScan) {
 //           const content = fs.readFileSync(fileUri.fsPath, "utf8");
 //           if (shouldSkipFile(content, fileUri.fsPath)) continue;
 //           analyzeFileStrings(fileUri.fsPath, content, rootPath, stringUsageMap);
 //         }
 
-//         // D. DECISION PHASE (Determine Keys)
+//         // C. DECISION PHASE (Determine Keys)
 //         const textToKeyMap = new Map<string, string>();
 
 //         stringUsageMap.forEach((stats, text) => {
-//           // If already localized, reuse key
+//           // 1. REUSE: If already localized in JSON, use that key
 //           if (existingKeysMap.has(text)) {
 //             textToKeyMap.set(text, existingKeysMap.get(text)!);
 //             return;
 //           }
 
+//           // 2. SORT: New strings logic
 //           const uniqueFeatures = new Set(stats.locations.map((l) => l.feature))
 //             .size;
 //           const totalUses = stats.locations.length;
 
 //           let distinctKey = generateSafeKey(text);
 
-//           // LOGIC: Global vs Feature vs Specific
+//           // --- LOGIC: Global vs Feature vs Specific ---
+
+//           // Case A: Used in Multiple Features (>= 2) -> GLOBAL COMMON
 //           if (uniqueFeatures >= GLOBAL_THRESHOLD) {
 //             distinctKey =
 //               stats.wordCount === 1
-//                 ? `common_words.${distinctKey}`
-//                 : `common_sentences.${distinctKey}`;
-//           } else if (
+//                 ? `common.words.${distinctKey}`
+//                 : `common.sentences.${distinctKey}`;
+//           }
+//           // Case B: Used Multiple Times in ONE Feature -> FEATURE COMMON
+//           else if (
 //             uniqueFeatures === 1 &&
 //             totalUses >= FEATURE_COMMON_THRESHOLD
 //           ) {
 //             const featureName = stats.locations[0].feature;
 //             distinctKey = `features.${featureName}.common.${distinctKey}`;
-//           } else {
+//           }
+//           // Case C: Used Once (or rarely) -> SPECIFIC PAGE KEY
+//           else {
 //             const loc = stats.locations[0];
-//             // Clean up relative path for key usage
 //             let cleanPath = loc.relativePath
 //               .replace(".dart", "")
-//               .replace(/\//g, ".");
-//             // Remove 'lib.' prefix if present
+//               .replace(/[\\/]/g, ".");
 //             if (cleanPath.startsWith("lib."))
 //               cleanPath = cleanPath.substring(4);
 
@@ -214,16 +244,15 @@
 //           }
 
 //           textToKeyMap.set(text, distinctKey);
-//           // Add to In-Memory JSON
 //           addNestedKey(translations, distinctKey.split("."), text);
 //         });
 
-//         // E. PASS 2: EXECUTION (Replace Strings)
+//         // D. PASS 2: EXECUTION (Replace Strings)
 //         progress.report({ message: "Applying changes..." });
 //         let filesChangedCount = 0;
 //         const generatedImport = `import 'package:${packageName}/config/constants/gen/locale_keys.g.dart';`;
 
-//         for (const fileUri of files) {
+//         for (const fileUri of filesToScan) {
 //           const filePath = fileUri.fsPath;
 //           const content = fs.readFileSync(filePath, "utf8");
 //           if (shouldSkipFile(content, filePath)) continue;
@@ -240,7 +269,7 @@
 //           }
 //         }
 
-//         // F. Save & Run Generator
+//         // E. Save & Run Generator
 //         if (filesChangedCount > 0) {
 //           fs.writeFileSync(
 //             translationFileAbsPath,
@@ -253,7 +282,7 @@
 
 //           await exec(genCommand, { cwd: rootPath });
 //           vscode.window.showInformationMessage(
-//             `✅ Localized ${filesChangedCount} files with Smart Sorting!`,
+//             `✅ Localized ${filesChangedCount} files successfully!`,
 //           );
 //         } else {
 //           vscode.window.showInformationMessage(
@@ -278,22 +307,9 @@
 // ) {
 //   const stringLiteralRegex = /(['"])((?:\\.|(?!\1).)+)\1/g;
 
-//   // Determine Feature: lib/features/login -> 'login'
+//   // --- FEATURE DETECTION ---
 //   const relativePath = path.relative(path.join(rootPath, "lib"), filePath);
-//   const parts = relativePath.split(path.sep);
-
-//   // Attempt to guess "Feature".
-//   // If structure is lib/features/X, use X. If lib/pages/X, use X.
-//   // Fallback to top-level folder.
-//   let featureName = parts[0];
-//   if (
-//     (parts[0] === "features" ||
-//       parts[0] === "pages" ||
-//       parts[0] === "modules") &&
-//     parts.length > 1
-//   ) {
-//     featureName = parts[1];
-//   }
+//   const featureName = detectFeatureName(relativePath);
 
 //   let match;
 //   while ((match = stringLiteralRegex.exec(content)) !== null) {
@@ -325,6 +341,20 @@
 //   }
 // }
 
+// // ========================== NEW HELPER ==========================
+
+// function detectFeatureName(relativePath: string): string {
+//   const parts = relativePath.split(path.sep);
+//   if (
+//     ["features", "pages", "screens", "views", "modules", "ui"].includes(
+//       parts[0],
+//     )
+//   ) {
+//     return parts.length > 1 ? parts[1] : parts[0];
+//   }
+//   return parts[0];
+// }
+
 // // ========================== REPLACEMENT LOGIC ==========================
 
 // function replaceInFile(
@@ -340,7 +370,6 @@
 //       if (shouldSkipBasic(text)) return fullMatch;
 //       const contextBefore = content.substring(Math.max(0, offset - 50), offset);
 
-//       // Context Checks must match Analysis checks exactly
 //       if (isImportLine(contextBefore)) return fullMatch;
 //       if (isInTechnicalFunction(contextBefore)) return fullMatch;
 //       if (!isUIContext(contextBefore)) return fullMatch;
@@ -386,10 +415,8 @@
 
 // function isUIContext(contextBefore: string): boolean {
 //   const trimmed = contextBefore.trimEnd();
-//   // 1. Named Params (label: "...")
 //   const namedParamMatch = trimmed.match(/([a-zA-Z0-9_]+)\s*:\s*$/);
 //   if (namedParamMatch && UI_PARAMS.has(namedParamMatch[1])) return true;
-//   // 2. Widget Constructor (Text("..."))
 //   const widgetMatch = trimmed.match(/([a-zA-Z0-9_]+)\s*\(\s*$/);
 //   if (widgetMatch && UI_WIDGETS.has(widgetMatch[1])) return true;
 //   return false;
@@ -467,7 +494,6 @@
 // }
 
 // function cleanupConstKeywords(content: string): string {
-//   // Removes 'const' if followed by a widget or list containing LocaleKeys
 //   const widgetConstRegex =
 //     /const\s+(?=[a-zA-Z0-9_]+\s*\([^;]*?LocaleKeys[^;]*?\.tr\(\))/g;
 //   const listConstRegex = /const\s+(?=\[\s*.*LocaleKeys.*\.tr\(\))/g;
