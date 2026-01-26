@@ -1,283 +1,501 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as cp from 'child_process';
-import { promisify } from 'util';
-import { getPackageName, checkTranslationFileExists } from '../utils/project_utils';
+import * as vscode from "vscode";
+import * as path from "path";
+import * as fs from "fs";
+import * as cp from "child_process";
+import { promisify } from "util";
+import {
+  getPackageName,
+  checkTranslationFileExists,
+} from "../utils/project_utils";
 
 const exec = promisify(cp.exec);
 
 // ========================== CONFIGURATION ==========================
-const TRANSLATIONS_PATH = 'assets/translations/en-GB.json';
-const EASY_LOC_IMPORT = "import 'package:easy_localization/easy_localization.dart';";
-// ===================================================================
+const TRANSLATIONS_PATH = "assets/translations/en-GB.json";
+const EASY_LOC_IMPORT =
+  "import 'package:easy_localization/easy_localization.dart';";
+
+// UI Context Rules
+const UI_PARAMS = new Set([
+  "text",
+  "label",
+  "labelText",
+  "hintText",
+  "errorText",
+  "helperText",
+  "title",
+  "subtitle",
+  "message",
+  "content",
+  "header",
+  "placeholder",
+  "validate",
+  "description",
+]);
+const UI_WIDGETS = new Set([
+  "Text",
+  "AppText",
+  "RichText",
+  "TextSpan",
+  "Toast",
+  "SnackBar",
+  "AlertDialog",
+  "ListTile",
+  "showDialog",
+  "CustomButton",
+]);
+const TECH_FUNCTIONS = new Set([
+  "print",
+  "debugPrint",
+  "log",
+  "throw",
+  "Exception",
+  "jsonDecode",
+  "jsonEncode",
+]);
+
+// Thresholds for sorting
+const GLOBAL_THRESHOLD = 1; // Used in 2+ features -> common.words
+const FEATURE_COMMON_THRESHOLD = 2; // Used in 2+ files inside ONE feature -> features.profile.common
+
+// ========================== TYPES ==========================
+
+interface StringStats {
+  text: string;
+  wordCount: number;
+  locations: Array<{
+    filePath: string;
+    feature: string;
+    relativePath: string;
+  }>;
+}
+
+// ========================== MAIN COMMAND ==========================
 
 export async function extractLocalizationAggressiveCommand() {
-    // 1. Setup - Check Workspace
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-        vscode.window.showErrorMessage('No workspace opened.');
-        return;
+  // 1. Setup - Check Workspace
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    vscode.window.showErrorMessage("❌ No workspace opened.");
+    return;
+  }
+  const rootPath = workspaceFolders[0].uri.fsPath;
+
+  // 2. UTILS: Project Checks
+  const packageName = getPackageName(rootPath);
+  if (!packageName) {
+    vscode.window.showErrorMessage(
+      "❌ Could not find pubspec.yaml or package name.",
+    );
+    return;
+  }
+
+  const hasTranslationFile = checkTranslationFileExists(
+    rootPath,
+    TRANSLATIONS_PATH,
+  );
+  if (!hasTranslationFile) {
+    vscode.window.showErrorMessage(
+      `❌ Translation file not found at: ${TRANSLATIONS_PATH}`,
+    );
+    return;
+  }
+
+  // 3. SELECTION MENU: Current File or Folder?
+  const selection = await vscode.window.showQuickPick(
+    ["Current File", "Select Folder"],
+    {
+      placeHolder: "Where do you want to extract strings from?",
+    },
+  );
+
+  if (!selection) return;
+
+  let filesToScan: vscode.Uri[] = [];
+
+  // --- OPTION A: CURRENT FILE ---
+  if (selection === "Current File") {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showErrorMessage("❌ No file is currently open.");
+      return;
     }
-    const rootPath = workspaceFolders[0].uri.fsPath;
-
-    // 2. UTILS: Project Checks
-    const packageName = getPackageName(rootPath);
-    if (!packageName) return;
-
-    const hasTranslationFile = checkTranslationFileExists(rootPath, TRANSLATIONS_PATH);
-    if (!hasTranslationFile) return;
-
-    const translationFileAbsPath = path.join(rootPath, TRANSLATIONS_PATH);
-    const generatedImport = `import 'package:${packageName}/config/constants/gen/locale_keys.g.dart';`;
-
-    // 3. Prompt User for Target Folder
+    const filePath = editor.document.uri.fsPath;
+    if (!filePath.endsWith(".dart")) {
+      vscode.window.showErrorMessage("❌ The open file is not a Dart file.");
+      return;
+    }
+    if (!filePath.includes(path.join(rootPath, "lib"))) {
+      vscode.window.showErrorMessage("❌ File must be inside the lib/ folder.");
+      return;
+    }
+    filesToScan = [editor.document.uri];
+  }
+  // --- OPTION B: SELECT FOLDER ---
+  else {
     const selectedFolder = await vscode.window.showOpenDialog({
-        canSelectFiles: false,
-        canSelectFolders: true,
-        canSelectMany: false,
-        openLabel: 'Select Folder for Localization',
-        defaultUri: vscode.Uri.file(path.join(rootPath, 'lib'))
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: "Select Folder to Scan",
+      defaultUri: vscode.Uri.file(path.join(rootPath, "lib")),
     });
 
-    if (!selectedFolder || selectedFolder.length === 0) {
-        return; // User cancelled
-    }
+    if (!selectedFolder || selectedFolder.length === 0) return;
 
     const targetFolderPath = selectedFolder[0].fsPath;
-
-    // Verify selection is inside the project
     if (!targetFolderPath.startsWith(rootPath)) {
-        vscode.window.showErrorMessage("Please select a folder inside the current project.");
-        return;
+      vscode.window.showErrorMessage(
+        "❌ Please select a folder inside the current project.",
+      );
+      return;
     }
 
-    vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: "Aggressive Localization V3...",
-        cancellable: false
-    }, async (progress) => {
-        try {
-            // 4. Load JSON
-            const jsonContent = fs.readFileSync(translationFileAbsPath, 'utf8').trim();
-            let translations: any = jsonContent.length === 0 ? {} : JSON.parse(jsonContent);
-            let translationsUpdated = false;
+    const relativeSearchFolder = path.relative(rootPath, targetFolderPath);
+    const globPattern = new vscode.RelativePattern(
+      rootPath,
+      `${relativeSearchFolder}/**/*.dart`,
+    );
+    filesToScan = await vscode.workspace.findFiles(globPattern, "**/*.g.dart");
+  }
 
-            // 5. Find Files (Scoped to selection)
-            // Create a relative glob pattern for findFiles
-            const relativeSearchFolder = path.relative(rootPath, targetFolderPath);
-            // Ensure glob format (forward slashes)
-            const globPattern = new vscode.RelativePattern(rootPath, `${relativeSearchFolder}/**/*.dart`);
-            
-            const files = await vscode.workspace.findFiles(globPattern, '**/*.g.dart');
+  if (filesToScan.length === 0) {
+    vscode.window.showInformationMessage("ℹ️ No Dart files found to process.");
+    return;
+  }
 
-            for (const fileUri of files) {
-                const filePath = fileUri.fsPath;
-                if (filePath.endsWith('.freezed.dart')) continue;
+  // 4. Start Analysis Process
+  vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "Smart Localization...",
+      cancellable: false,
+    },
+    async (progress) => {
+      try {
+        const translationFileAbsPath = path.join(rootPath, TRANSLATIONS_PATH);
 
-                const fileContent = fs.readFileSync(filePath, 'utf8');
+        // A. Load Existing Translations
+        const jsonContent = fs
+          .readFileSync(translationFileAbsPath, "utf8")
+          .trim();
+        let translations =
+          jsonContent.length === 0 ? {} : JSON.parse(jsonContent);
 
-                // Skip generation/config files
-                if (fileContent.includes('part of') || fileContent.includes('generate:false')) continue;
+        // Build map of { "Existing Value" : "key.path" }
+        let existingKeysMap = buildReverseIndex(translations);
 
-                const result = processAggressive(filePath, fileContent, rootPath, translations, generatedImport);
+        // B. PASS 1: ANALYSIS (Scan & Count)
+        const stringUsageMap = new Map<string, StringStats>();
+        progress.report({
+          message: `Analyzing ${filesToScan.length} files...`,
+        });
 
-                if (result.hasChanged) {
-                    translationsUpdated = true;
-                    if (result.newContent) {
-                        fs.writeFileSync(filePath, result.newContent, 'utf8');
-                        console.log(`📝 Modified: ${path.basename(filePath)}`);
-                    }
-                }
-            }
-
-            // 6. Save & Generate
-            if (translationsUpdated) {
-                fs.writeFileSync(translationFileAbsPath, JSON.stringify(translations, null, 2), 'utf8');
-                progress.report({ message: "Running easy_localization generator..." });
-
-                const command = [
-                    'dart run easy_localization:generate',
-                    '-S assets/translations',
-                    '-f keys',
-                    '-O lib/config/constants/gen',
-                    '-o locale_keys.g.dart'
-                ].join(' ');
-
-                try {
-                    const { stdout, stderr } = await exec(command, { cwd: rootPath });
-                    console.log(stdout);
-                    if (stderr) console.error(stderr);
-                    vscode.window.showInformationMessage('✅ Aggressive Localization Complete!');
-                    vscode.window.showWarningMessage('⚠️ Note: You may need to manually remove "const" keywords from modified widgets.');
-                } catch (error: any) {
-                    vscode.window.showErrorMessage(`❌ Code generation failed: ${error.message}`);
-                }
-            } else {
-                vscode.window.showInformationMessage('ℹ️ No strings found to localize in selection.');
-            }
-
-        } catch (e: any) {
-            vscode.window.showErrorMessage(`Error: ${e.message}`);
-        }
-    });
-}
-
-// ========================== CORE LOGIC ==========================
-
-function processAggressive(
-    filePath: string,
-    content: string,
-    rootPath: string,
-    translations: any,
-    generatedImportString: string
-): { hasChanged: boolean, newContent?: string } {
-
-    const originalContent = content;
-    const relativePath = path.relative(path.join(rootPath, 'lib'), filePath);
-    const pathSegments = relativePath
-        .replace(/\.dart$/, '')
-        .split(path.sep)
-        .map(s => s.toLowerCase());
-
-    // Matches: 'text' or "text"
-    const stringLiteralRegex = /(['"])((?:\\.|(?!\1).)+)\1/g;
-
-    let hasMatch = false;
-
-    // We use a replacer function to handle logic per match
-    let newContent = content.replace(stringLiteralRegex, (fullMatch, quote, text, offset) => {
-        
-        // --- 1. CONTEXT CHECKS ---
-        if (shouldSkip(text)) return fullMatch;
-
-        // Context Strings
-        const contextBefore = content.substring(Math.max(0, offset - 20), offset);
-        const contextAfter = content.substring(offset + fullMatch.length, Math.min(content.length, offset + fullMatch.length + 20));
-
-        // Skip Imports/Exports/Parts
-        if (isImportLine(content, offset)) return fullMatch;
-
-        // Skip Logic: == "text", != "text", case "text"
-        const trimmedBefore = contextBefore.trimEnd();
-        if (trimmedBefore.endsWith('==') || trimmedBefore.endsWith('!=') || trimmedBefore.endsWith('case')) {
-            return fullMatch;
+        for (const fileUri of filesToScan) {
+          const content = fs.readFileSync(fileUri.fsPath, "utf8");
+          if (shouldSkipFile(content, fileUri.fsPath)) continue;
+          analyzeFileStrings(fileUri.fsPath, content, rootPath, stringUsageMap);
         }
 
-        // Skip Map Keys: {"key": value} -> Check if followed immediately by colon
-        // Note: We trimLeft() the contextAfter to ignore spaces/newlines
-        if (contextAfter.trimStart().startsWith(':')) return fullMatch;
+        // C. DECISION PHASE (Determine Keys)
+        const textToKeyMap = new Map<string, string>();
 
-        // Skip already localized
-        if (contextBefore.includes('LocaleKeys.')) return fullMatch;
+        stringUsageMap.forEach((stats, text) => {
+          // 1. REUSE: If already localized in JSON, use that key
+          if (existingKeysMap.has(text)) {
+            textToKeyMap.set(text, existingKeysMap.get(text)!);
+            return;
+          }
 
-        // --- 2. EXTRACTION ---
-        const distinctKey = generateKey(text);
-        const fullKeyPath = [...pathSegments, distinctKey];
+          // 2. SORT: New strings logic
+          const uniqueFeatures = new Set(stats.locations.map((l) => l.feature))
+            .size;
+          const totalUses = stats.locations.length;
 
-        const added = addNestedKey(translations, fullKeyPath, text);
-        if (added) {
-            hasMatch = true;
-            console.log(`   ➕ [Aggressive] Added: ${fullKeyPath.join('.')}`);
+          let distinctKey = generateSafeKey(text);
+
+          // --- LOGIC: Global vs Feature vs Specific ---
+
+          // Case A: Used in Multiple Features (>= 2) -> GLOBAL COMMON
+          if (uniqueFeatures >= GLOBAL_THRESHOLD) {
+            distinctKey =
+              stats.wordCount === 1
+                ? `common.words.${distinctKey}`
+                : `common.sentences.${distinctKey}`;
+          }
+          // Case B: Used Multiple Times in ONE Feature -> FEATURE COMMON
+          else if (
+            uniqueFeatures === 1 &&
+            totalUses >= FEATURE_COMMON_THRESHOLD
+          ) {
+            const featureName = stats.locations[0].feature;
+            distinctKey = `features.${featureName}.common.${distinctKey}`;
+          }
+          // Case C: Used Once (or rarely) -> SPECIFIC PAGE KEY
+          else {
+            const loc = stats.locations[0];
+            let cleanPath = loc.relativePath
+              .replace(".dart", "")
+              .replace(/[\\/]/g, ".");
+            if (cleanPath.startsWith("lib."))
+              cleanPath = cleanPath.substring(4);
+
+            distinctKey = `${cleanPath}.${distinctKey}`;
+          }
+
+          textToKeyMap.set(text, distinctKey);
+          addNestedKey(translations, distinctKey.split("."), text);
+        });
+
+        // D. PASS 2: EXECUTION (Replace Strings)
+        progress.report({ message: "Applying changes..." });
+        let filesChangedCount = 0;
+        const generatedImport = `import 'package:${packageName}/config/constants/gen/locale_keys.g.dart';`;
+
+        for (const fileUri of filesToScan) {
+          const filePath = fileUri.fsPath;
+          const content = fs.readFileSync(filePath, "utf8");
+          if (shouldSkipFile(content, filePath)) continue;
+
+          const newContent = replaceInFile(
+            content,
+            textToKeyMap,
+            generatedImport,
+          );
+
+          if (newContent !== content) {
+            fs.writeFileSync(filePath, newContent, "utf8");
+            filesChangedCount++;
+          }
         }
 
-        const dartKey = fullKeyPath.join('_');
+        // E. Save & Run Generator
+        if (filesChangedCount > 0) {
+          fs.writeFileSync(
+            translationFileAbsPath,
+            JSON.stringify(translations, null, 2),
+            "utf8",
+          );
 
-        // --- 3. REPLACEMENT ---
-        // Special Handling: AppText("...") -> AppText(LocaleKeys.xxx)
-        // General Handling: Text("...")    -> Text(LocaleKeys.xxx.tr())
-        
-        if (trimmedBefore.endsWith('AppText(')) {
-            return `LocaleKeys.${dartKey}`;
+          progress.report({ message: "Running code generation..." });
+          const genCommand = `dart run easy_localization:generate -S assets/translations -f keys -O lib/config/constants/gen -o locale_keys.g.dart`;
+
+          await exec(genCommand, { cwd: rootPath });
+          vscode.window.showInformationMessage(
+            `✅ Localized ${filesChangedCount} files successfully!`,
+          );
         } else {
-            return `LocaleKeys.${dartKey}.tr()`;
+          vscode.window.showInformationMessage(
+            "ℹ️ No new strings found to localize.",
+          );
         }
-    });
-
-    if (newContent !== originalContent) {
-        // Add Imports
-        if (!newContent.includes('locale_keys.g.dart')) {
-            newContent = `${generatedImportString}\n${newContent}`;
-        }
-        // Only add easy_localization if we used .tr()
-        if (newContent.includes('.tr()') && !newContent.includes('package:easy_localization/easy_localization.dart')) {
-            newContent = `${EASY_LOC_IMPORT}\n${newContent}`;
-        }
-        return { hasChanged: true, newContent };
-    }
-
-    return { hasChanged: hasMatch, newContent: undefined };
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`❌ Error: ${e.message}`);
+        console.error(e);
+      }
+    },
+  );
 }
 
+// ========================== ANALYSIS LOGIC ==========================
+
+function analyzeFileStrings(
+  filePath: string,
+  content: string,
+  rootPath: string,
+  map: Map<string, StringStats>,
+) {
+  const stringLiteralRegex = /(['"])((?:\\.|(?!\1).)+)\1/g;
+
+  // --- FEATURE DETECTION ---
+  const relativePath = path.relative(path.join(rootPath, "lib"), filePath);
+  const featureName = detectFeatureName(relativePath);
+
+  let match;
+  while ((match = stringLiteralRegex.exec(content)) !== null) {
+    const text = match[2];
+    const offset = match.index;
+
+    if (shouldSkipBasic(text)) continue;
+
+    const contextBefore = content.substring(Math.max(0, offset - 50), offset);
+
+    if (isImportLine(contextBefore)) continue;
+    if (isInTechnicalFunction(contextBefore)) continue;
+    if (!isUIContext(contextBefore)) continue;
+    if (contextBefore.trim().endsWith("LocaleKeys.")) continue;
+
+    if (!map.has(text)) {
+      map.set(text, {
+        text: text,
+        wordCount: text.split(/\s+/).length,
+        locations: [],
+      });
+    }
+
+    map.get(text)!.locations.push({
+      filePath: filePath,
+      feature: featureName,
+      relativePath: relativePath,
+    });
+  }
+}
+
+// ========================== NEW HELPER ==========================
+
+function detectFeatureName(relativePath: string): string {
+  const parts = relativePath.split(path.sep);
+  if (
+    ["features", "pages", "screens", "views", "modules", "ui"].includes(
+      parts[0],
+    )
+  ) {
+    return parts.length > 1 ? parts[1] : parts[0];
+  }
+  return parts[0];
+}
+
+// ========================== REPLACEMENT LOGIC ==========================
+
+function replaceInFile(
+  content: string,
+  keyMap: Map<string, string>,
+  importString: string,
+): string {
+  const stringLiteralRegex = /(['"])((?:\\.|(?!\1).)+)\1/g;
+
+  let newContent = content.replace(
+    stringLiteralRegex,
+    (fullMatch, quote, text, offset) => {
+      if (shouldSkipBasic(text)) return fullMatch;
+      const contextBefore = content.substring(Math.max(0, offset - 50), offset);
+
+      if (isImportLine(contextBefore)) return fullMatch;
+      if (isInTechnicalFunction(contextBefore)) return fullMatch;
+      if (!isUIContext(contextBefore)) return fullMatch;
+      if (contextBefore.trim().endsWith("LocaleKeys.")) return fullMatch;
+
+      if (keyMap.has(text)) {
+        const dotKey = keyMap.get(text)!;
+        const dartKey = dotKey.replace(/\./g, "_");
+
+        if (contextBefore.trim().endsWith("AppText(")) {
+          return `LocaleKeys.${dartKey}`;
+        } else {
+          return `LocaleKeys.${dartKey}.tr()`;
+        }
+      }
+      return fullMatch;
+    },
+  );
+
+  if (newContent !== content) {
+    newContent = cleanupConstKeywords(newContent);
+    if (!newContent.includes("locale_keys.g.dart")) {
+      newContent = `${importString}\n${newContent}`;
+    }
+    if (
+      newContent.includes(".tr()") &&
+      !newContent.includes("package:easy_localization/easy_localization.dart")
+    ) {
+      newContent = `${EASY_LOC_IMPORT}\n${newContent}`;
+    }
+  }
+  return newContent;
+}
 
 // ========================== HELPERS ==========================
 
-function isImportLine(content: string, position: number): boolean {
-    const lineStart = content.lastIndexOf('\n', position) + 1; // +1 to skip the newline itself
-    const lineEnd = content.indexOf('\n', position);
-    const line = content.substring(lineStart, lineEnd !== -1 ? lineEnd : content.length).trim();
-    
-    return line.startsWith('import') || line.startsWith('export') || line.startsWith('part');
+function shouldSkipFile(content: string, path: string): boolean {
+  if (path.endsWith(".freezed.dart") || path.endsWith(".g.dart")) return true;
+  if (content.includes("part of") || content.includes("generate:false"))
+    return true;
+  return false;
 }
 
-function shouldSkip(text: string): boolean {
-    const t = text.trim();
-    if (t.length < 2) return true;
-    if (t.includes('$')) return true; // Dynamic interpolation
-    
-    // Technical prefixes
-    if (t.startsWith('assets/')) return true;
-    if (t.startsWith('lib/')) return true;
-    if (t.startsWith('http')) return true;
-    if (t.startsWith('package:')) return true;
-    if (t.startsWith('urn:')) return true;
-
-    // Files
-    if (/\.(png|svg|jpg|jpeg|json)$/i.test(t)) return true;
-
-    // Date/Time formats (simple check)
-    if (t.includes('yyyy') || t.includes('HH:mm')) return true;
-
-    // JSON or Regex patterns
-    if (t.includes('{') && t.includes('}')) return true;
-    
-    // Enum style (ALL_CAPS_UNDERSCORES)
-    if (/^[A-Z0-9_]+$/.test(t)) return true;
-
-    // Numeric/Symbol only
-    if (/^[\d\W]+$/.test(t)) return true;
-
-    return false;
+function isUIContext(contextBefore: string): boolean {
+  const trimmed = contextBefore.trimEnd();
+  const namedParamMatch = trimmed.match(/([a-zA-Z0-9_]+)\s*:\s*$/);
+  if (namedParamMatch && UI_PARAMS.has(namedParamMatch[1])) return true;
+  const widgetMatch = trimmed.match(/([a-zA-Z0-9_]+)\s*\(\s*$/);
+  if (widgetMatch && UI_WIDGETS.has(widgetMatch[1])) return true;
+  return false;
 }
 
-function addNestedKey(root: any, keys: string[], value: string): boolean {
-    let current = root;
-    for (let i = 0; i < keys.length - 1; i++) {
-        const key = keys[i];
-        if (!current[key]) current[key] = {};
-        if (typeof current[key] !== 'object') return false; // Conflict
-        current = current[key];
+function isInTechnicalFunction(contextBefore: string): boolean {
+  const trimmed = contextBefore.trimEnd();
+  for (const func of TECH_FUNCTIONS)
+    if (trimmed.endsWith(`${func}(`)) return true;
+  if (
+    trimmed.endsWith("==") ||
+    trimmed.endsWith("!=") ||
+    trimmed.endsWith("case")
+  )
+    return true;
+  return false;
+}
+
+function isImportLine(contextBefore: string): boolean {
+  const lines = contextBefore.split("\n");
+  const lastLine = lines[lines.length - 1].trim();
+  return lastLine.startsWith("import") || lastLine.startsWith("export");
+}
+
+function shouldSkipBasic(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 2) return true;
+  if (t.includes("$")) return true;
+  if (
+    t.startsWith("assets/") ||
+    t.startsWith("http") ||
+    t.startsWith("package:")
+  )
+    return true;
+  if (/\.(png|svg|jpg|json)$/i.test(t)) return true;
+  if (/^[A-Z0-9_]+$/.test(t)) return true; // ENUM style
+  return false;
+}
+
+function generateSafeKey(text: string): string {
+  let key = text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9 ]/g, "")
+    .replace(/\s+/g, "_");
+  if (/^[0-9]/.test(key)) key = "k_" + key;
+  if (key.length > 30) key = key.substring(0, 30);
+  return key || "text";
+}
+
+function addNestedKey(root: any, keys: string[], value: string) {
+  let current = root;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i];
+    if (!current[key]) current[key] = {};
+    current = current[key];
+  }
+  current[keys[keys.length - 1]] = value;
+}
+
+function buildReverseIndex(json: any, prefix = ""): Map<string, string> {
+  let map = new Map<string, string>();
+  for (const key in json) {
+    if (typeof json[key] === "string") {
+      map.set(json[key], prefix ? `${prefix}.${key}` : key);
+    } else if (typeof json[key] === "object") {
+      const nested = buildReverseIndex(
+        json[key],
+        prefix ? `${prefix}.${key}` : key,
+      );
+      nested.forEach((v, k) => map.set(k, v));
     }
-    const finalKey = keys[keys.length - 1];
-    if (!current[finalKey]) {
-        current[finalKey] = value;
-        return true;
-    }
-    return false;
+  }
+  return map;
 }
 
-function generateKey(text: string): string {
-    let key = text
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9 ]/g, '') // Remove symbols
-        .replace(/\s+/g, '_');      // Space to underscore
-    
-    // If starts with number, prefix k_
-    if (/^[0-9]/.test(key)) key = 'k_' + key;
-    
-    if (key.length > 30) key = key.substring(0, 30);
-    if (key.length === 0) key = 'text';
-    
-    return key;
+function cleanupConstKeywords(content: string): string {
+  const widgetConstRegex =
+    /const\s+(?=[a-zA-Z0-9_]+\s*\([^;]*?LocaleKeys[^;]*?\.tr\(\))/g;
+  const listConstRegex = /const\s+(?=\[\s*.*LocaleKeys.*\.tr\(\))/g;
+  return content.replace(widgetConstRegex, "").replace(listConstRegex, "");
 }
