@@ -29,7 +29,14 @@ export function activate(context: vscode.ExtensionContext) {
     "flutter-genius.extractLocalizationAggressive",
     extractLocalizationAggressiveCommand,
   );
-
+  // let locFileShiftDisposable = vscode.commands.registerCommand(
+  //   "flutter-genius.fixMovedLocalizedFiles",
+  //   fixMovedFilesCommand,
+  // );
+  // let revertLocalesDisposable = vscode.commands.registerCommand(
+  //   "flutter-genius.revertLocalizationChanges",
+  //   revertLocalizationCommand,
+  // );
   let createBlocDisposable = vscode.commands.registerCommand(
     "flutter-genius.createBloc",
     (uri: vscode.Uri) => createBlocCommand(uri),
@@ -55,6 +62,8 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(sizeExtDisposable);
   context.subscriptions.push(createBlocDisposable);
   context.subscriptions.push(locAggressiveDisposable);
+  // context.subscriptions.push(revertLocalesDisposable);
+  // context.subscriptions.push(locFileShiftDisposable);
   context.subscriptions.push(locDisposable);
   context.subscriptions.push(disposable);
 }

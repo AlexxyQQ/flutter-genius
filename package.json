@@ -74,6 +74,14 @@
       {
         "command": "flutter-genius.extractClasses",
         "title": "Flutter Genius: Extract Classes to Files"
+      },
+      {
+        "command": "flutter-genius.fixMovedLocalizedFiles",
+        "title": "Flutter Genius: Fix Moved Localized Files"
+      },
+      {
+        "command": "flutter-genius.revertLocalizationChanges",
+        "title": "Flutter Genius: Revert Localization Changes"
       }
     ],
     "menus": {

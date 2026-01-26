@@ -132,3 +132,73 @@ dev_dependencies:
   freezed: ^2.4.0
   json_serializable: ^6.7.0
 ```
+
+
+
+Rule 1: Global Common Strings (Top Priority)
+
+Condition: If a specific string (word or sentence) appears in two or more different Features (e.g., found in both Feature -> Profile and Feature -> Settings).
+
+Action: Extract this string to the root-level common object.
+
+JSON Structure:
+JSON
+
+{
+  "common": {
+    "words": {
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "sentences": {
+      "error_occurred": "An error occurred. Please try again."
+    }
+  }
+}
+
+Rule 2: Feature-Level Common Strings
+
+Condition: If a specific string appears in multiple files, but ONLY within the same Feature (e.g., found in edit_profile.dart and profile_view.dart, both inside Feature -> Profile).
+
+Action: Extract this string to a common object nested specifically inside that feature.
+
+JSON Structure:
+JSON
+
+{
+  "features": {
+    "profile": {
+      "common": {
+        "sentences": {
+          "edit_user_profile": "Edit User Profile"
+        },
+        "words": {
+          "avatar": "Avatar"
+        }
+      },
+      "screens": {
+        // Specific strings that only appear in one file would go here
+      }
+    }
+  }
+}
+
+Summary of Algorithm Flow
+
+When processing a string found in the code, the script should follow this decision tree:
+
+    Check Global Usage:
+
+        Is this string used in Feature A AND Feature B?
+
+        Yes: Place in root -> common.
+
+        No: Proceed to step 2.
+
+    Check Feature Usage:
+
+        Is this string used in File 1 AND File 2 (both inside Feature A)?
+
+        Yes: Place in features -> feature_a -> common.
+
+        No: (It is unique to a single file) Place in features -> feature_a -> specific_screen.
