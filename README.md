@@ -133,72 +133,42 @@ dev_dependencies:
   json_serializable: ^6.7.0
 ```
 
+now i want you to create me an extension , that will simpley conver the hardcoded string into localized strings. 
 
 
-Rule 1: Global Common Strings (Top Priority)
+i want the string be be according to the folder strecture and then name should be sensible for the keys.
 
-Condition: If a specific string (word or sentence) appears in two or more different Features (e.g., found in both Feature -> Profile and Feature -> Settings).
 
-Action: Extract this string to the root-level common object.
 
-JSON Structure:
-JSON
 
+eg:
+lib/
+  features/
+    auth/
+      login_screen.dart
+      'login' --> LocaleKeys.features_auth_login_screen_login
+      'Enter your username'  -->  LocaleKeys.features_auth_login_screen_enter_your_username
+
+
+    profile/
+      profile_screen.dart
+      'Profile' --> LocaleKeys.features_profile_profile_screen_profile
+      'Edit your profile' --> LocaleKeys.features_profile_profile_screen_edit_your_profile
+
+in engb 
 {
-  "common": {
-    "words": {
-      "save": "Save",
-      "cancel": "Cancel"
+  'features': {
+    'auth': {
+      'login_screen': {
+        'login': 'Login',
+        'enter_your_username': 'Enter your username'
+      }
     },
-    "sentences": {
-      "error_occurred": "An error occurred. Please try again."
-    }
-  }
-}
-
-Rule 2: Feature-Level Common Strings
-
-Condition: If a specific string appears in multiple files, but ONLY within the same Feature (e.g., found in edit_profile.dart and profile_view.dart, both inside Feature -> Profile).
-
-Action: Extract this string to a common object nested specifically inside that feature.
-
-JSON Structure:
-JSON
-
-{
-  "features": {
-    "profile": {
-      "common": {
-        "sentences": {
-          "edit_user_profile": "Edit User Profile"
-        },
-        "words": {
-          "avatar": "Avatar"
-        }
-      },
-      "screens": {
-        // Specific strings that only appear in one file would go here
+    'profile': {
+      'profile_screen': {
+        'profile': 'Profile',
+        'edit_your_profile': 'Edit your profile'
       }
     }
   }
 }
-
-Summary of Algorithm Flow
-
-When processing a string found in the code, the script should follow this decision tree:
-
-    Check Global Usage:
-
-        Is this string used in Feature A AND Feature B?
-
-        Yes: Place in root -> common.
-
-        No: Proceed to step 2.
-
-    Check Feature Usage:
-
-        Is this string used in File 1 AND File 2 (both inside Feature A)?
-
-        Yes: Place in features -> feature_a -> common.
-
-        No: (It is unique to a single file) Place in features -> feature_a -> specific_screen.

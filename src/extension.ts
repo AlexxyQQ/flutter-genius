@@ -6,6 +6,7 @@ import { createBlocCommand } from "./commands/create_bloc";
 import { addSizeExtensionCommand } from "./commands/add_size_extension";
 import { convertEnumToJsonEnumCommand } from "./commands/convert_enum_command";
 import { extractClassesCommand } from "./commands/extract_classes";
+import { intoHardcodedStringCommand } from "./commands/into_hardcoded_string";
 
 /**
  * This method is called when your extension is activated.
@@ -33,10 +34,10 @@ export function activate(context: vscode.ExtensionContext) {
   //   "flutter-genius.fixMovedLocalizedFiles",
   //   fixMovedFilesCommand,
   // );
-  // let revertLocalesDisposable = vscode.commands.registerCommand(
-  //   "flutter-genius.revertLocalizationChanges",
-  //   revertLocalizationCommand,
-  // );
+  let intoHardcodedStringDisposable = vscode.commands.registerCommand(
+    "flutter-genius.intoHardcodedString",
+    intoHardcodedStringCommand,
+  );
   let createBlocDisposable = vscode.commands.registerCommand(
     "flutter-genius.createBloc",
     (uri: vscode.Uri) => createBlocCommand(uri),
@@ -62,7 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(sizeExtDisposable);
   context.subscriptions.push(createBlocDisposable);
   context.subscriptions.push(locAggressiveDisposable);
-  // context.subscriptions.push(revertLocalesDisposable);
+  context.subscriptions.push(intoHardcodedStringDisposable);
   // context.subscriptions.push(locFileShiftDisposable);
   context.subscriptions.push(locDisposable);
   context.subscriptions.push(disposable);

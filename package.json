@@ -80,7 +80,7 @@
         "title": "Flutter Genius: Fix Moved Localized Files"
       },
       {
-        "command": "flutter-genius.revertLocalizationChanges",
+        "command": "flutter-genius.intoHardcodedString",
         "title": "Flutter Genius: Revert Localization Changes"
       }
     ],
