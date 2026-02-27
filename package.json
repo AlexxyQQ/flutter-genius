@@ -12,7 +12,7 @@
     "type": "git",
     "url": "https://github.com/AlexxyQQ/flutter-genius"
   },
-  "version": "0.2.4",
+  "version": "0.2.5",
   "engines": {
     "vscode": "^1.87.0"
   },
@@ -53,7 +53,11 @@
       },
       {
         "command": "flutter-genius.separateClasses",
-        "title": "Flutter Genius: Separate Classes"
+        "title": "Flutter Genius: Class Separator"
+      },
+      {
+        "command": "flutter-genius.generateJsonEnum",
+        "title": "Flutter Genius: Generate JSON Enum"
       }
     ],
     "menus": {
@@ -68,8 +72,55 @@
           "command": "flutter-genius.separateClasses",
           "when": "editorLangId == dart",
           "group": "flutter-genius@2"
+        },
+        {
+          "command": "flutter-genius.generateJsonEnum",
+          "when": "editorLangId == dart",
+          "group": "flutter-genius@3"
         }
       ]
+    },
+    "configuration": {
+      "title": "Flutter Genius",
+      "properties": {
+        "flutterGenius.jsonEnum.caseFormat": {
+          "type": "string",
+          "enum": [
+            "snake_case",
+            "camelCase",
+            "SCREAMING_SNAKE_CASE",
+            "Title Case",
+            "none"
+          ],
+          "enumDescriptions": [
+            "applePay → 'apple_pay'",
+            "applePay → 'applePay'",
+            "applePay → 'APPLE_PAY'",
+            "applePay → 'Apple Pay'",
+            "No @JsonValue annotations — use enum name as JSON value"
+          ],
+          "default": "snake_case",
+          "description": "Default @JsonValue case format used by the JSON Enum Generator."
+        },
+        "flutterGenius.jsonEnum.generateConverter": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the JSON Enum Generator should generate a companion JsonConverter class by default."
+        },
+        "flutterGenius.jsonEnum.nullHandling": {
+          "type": "string",
+          "enum": [
+            "firstValue",
+            "null"
+          ],
+          "enumDescriptions": [
+            "Return the first enum value when the JSON value is null or unknown.",
+            "Return null — converter type becomes EnumName? (nullable)."
+          ],
+          "default": "firstValue",
+          "description": "Default null-handling strategy for the generated JsonConverter."
+        }
+      }
     }
   },
   "scripts": {

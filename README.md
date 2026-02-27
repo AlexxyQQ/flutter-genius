@@ -10,6 +10,7 @@ A productivity extension for Flutter developers using **Clean Architecture** and
 |---|---|
 | **Entity → Model** | Generate a full Freezed model from any entity class — with JSON serialization and bidirectional mappers |
 | **Class Separator** | Split a multi-declaration Dart file into individual files with one click — enums, classes, and mixins each get their own file |
+| **JSON Enum Generator** | Convert any plain Dart enum into a `@JsonEnum` + `JsonConverter` pattern with configurable case format, converter toggle, and null handling |
 | **BLoC Generator** | Scaffold a complete BLoC feature (Bloc, Event, State) via the right-click menu |
 | **Localization (AppText)** | Extract strings wrapped in `AppText(...)` to your JSON translation file |
 | **Aggressive Localization** | Scan a folder and extract all hardcoded strings to `easy_localization` keys |
@@ -344,7 +345,122 @@ class Address {
 
 ---
 
-### 3. BLoC Generator (Freezed)
+### 3. JSON Enum Generator
+
+Converts a plain Dart enum into a `@JsonEnum(alwaysCreate: true)` enum with per-value `@JsonValue` annotations, `toJson()` / `fromString()` helpers, and an optional companion `JsonConverter` class — all in a single in-place rewrite.
+
+**How to use:**
+
+1. Open any Dart file containing an enum.
+2. Place your cursor **inside** the enum (or let the QuickPick appear if there are multiple enums).
+3. Run the command via:
+   - Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) → **Flutter Genius: Generate JSON Enum**
+   - Right-click inside the editor → **Flutter Genius: Generate JSON Enum**
+4. Answer the three QuickPick prompts (each shows your saved default at the top):
+   - **@JsonValue format** — how identifiers are serialized to JSON strings.
+   - **Converter class** — whether to emit the companion `EnumConverter`.
+   - **Null handling** — what `fromJson` returns when the value is `null` or unknown.
+
+After generating, run:
+
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
+
+#### @JsonValue Format Options
+
+| Option | Example (`applePay →`) |
+|---|---|
+| `snake_case` *(default)* | `'apple_pay'` |
+| `camelCase` | `'applePay'` |
+| `SCREAMING_SNAKE_CASE` | `'APPLE_PAY'` |
+| `Title Case` | `'Apple Pay'` |
+| `None` | No `@JsonValue` annotations |
+
+#### Null Handling Options (when converter is enabled)
+
+| Option | Converter type | fromJson(null) returns |
+|---|---|---|
+| Use first value *(default)* | `JsonConverter<EnumName, String?>` | first enum value |
+| Choose specific default | `JsonConverter<EnumName, String?>` | chosen value |
+| Return null | `JsonConverter<EnumName?, String?>` | `null` |
+
+#### Extension Settings
+
+Configure persistent defaults in **File > Preferences > Settings** under **Flutter Genius**:
+
+| Setting | Default | Description |
+|---|---|---|
+| `flutterGenius.jsonEnum.caseFormat` | `snake_case` | Default @JsonValue case format |
+| `flutterGenius.jsonEnum.generateConverter` | `true` | Generate converter class by default |
+| `flutterGenius.jsonEnum.nullHandling` | `firstValue` | Default null-handling strategy |
+
+The saved default appears at the top of each QuickPick step marked with **✦ saved default** so you can confirm it with a single keypress.
+
+#### Example
+
+**Input — plain enum:**
+
+```dart
+enum EmployeeApplicationStatusEnum {
+  pending,
+  selected,
+  rejected,
+  applePay,
+  googlePay,
+}
+```
+
+**Output — with `snake_case` + converter + first value default:**
+
+```dart
+import 'package:json_annotation/json_annotation.dart';
+
+part 'application_status_enum.g.dart';
+
+@JsonEnum(alwaysCreate: true)
+enum EmployeeApplicationStatusEnum {
+  @JsonValue('pending')
+  pending,
+  @JsonValue('selected')
+  selected,
+  @JsonValue('rejected')
+  rejected,
+  @JsonValue('apple_pay')
+  applePay,
+  @JsonValue('google_pay')
+  googlePay;
+
+  String toJson() => _$EmployeeApplicationStatusEnumEnumMap[this]!;
+
+  static EmployeeApplicationStatusEnum? fromString(String? value) =>
+      values.firstWhere(
+        (element) => element.name.toLowerCase() == value?.toLowerCase(),
+        orElse: () => values.first,
+      );
+}
+
+class EmployeeApplicationStatusEnumConverter
+    implements JsonConverter<EmployeeApplicationStatusEnum, String?> {
+  const EmployeeApplicationStatusEnumConverter();
+
+  @override
+  EmployeeApplicationStatusEnum fromJson(String? json) {
+    if (json == null) return EmployeeApplicationStatusEnum.values.first;
+    return EmployeeApplicationStatusEnum.values.firstWhere(
+      (e) => e.name.toLowerCase() == json.toLowerCase(),
+      orElse: () => EmployeeApplicationStatusEnum.values.first,
+    );
+  }
+
+  @override
+  String? toJson(EmployeeApplicationStatusEnum object) => object.toJson();
+}
+```
+
+---
+
+### 4. BLoC Generator (Freezed)
 
 
 Scaffold a complete BLoC feature folder via the explorer right-click menu.
@@ -363,7 +479,7 @@ login_bloc/
 
 ---
 
-### 4. Localization Extractor (AppText)
+### 5. Localization Extractor (AppText)
 
 Extract strings from a custom `AppText` widget into your JSON translation file.
 
@@ -377,7 +493,7 @@ Extract strings from a custom `AppText` widget into your JSON translation file.
 
 ---
 
-### 5. Aggressive Localization (Folder Scan)
+### 6. Aggressive Localization (Folder Scan)
 
 Extract **all** hardcoded strings in a folder.
 
@@ -390,7 +506,7 @@ Extract **all** hardcoded strings in a folder.
 
 ---
 
-### 6. Size Extension & Refactor
+### 7. Size Extension & Refactor
 
 Inject a responsive sizing extension and refactor verbose widget code to fluent syntax.
 

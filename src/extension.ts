@@ -16,6 +16,7 @@
 import * as vscode from "vscode";
 import { generateEntityToModelCommand } from "./commands/generate_entity_to_model";
 import { separateClassesCommand } from "./commands/separate_classes";
+import { generateJsonEnumCommand } from "./commands/generate_json_enum";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("Flutter Genius is now active.");
@@ -41,6 +42,17 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "flutter-genius.separateClasses",
       separateClassesCommand,
+    ),
+  );
+
+  // -------------------------------------------------------------------------
+  // JSON Enum Generator
+  // Converts a plain enum to a @JsonEnum + JsonConverter pattern in-place.
+  // -------------------------------------------------------------------------
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "flutter-genius.generateJsonEnum",
+      generateJsonEnumCommand,
     ),
   );
 }

@@ -4,6 +4,26 @@ All notable changes to Flutter Genius are documented here.
 
 ---
 
+## [0.2.5] — 2026-02-27
+
+### Added
+
+- **JSON Enum Generator command** (`Flutter Genius: Generate JSON Enum`) — converts a plain Dart enum into a fully wired `@JsonEnum` + `JsonConverter` pattern with a configurable multi-step QuickPick flow:
+  - **@JsonValue case format**: snake_case (default), camelCase, SCREAMING_SNAKE_CASE, Title Case, or None.
+  - **Converter toggle**: optionally skip the companion `EnumConverter` class entirely.
+  - **Null handling**: return the first value, pick a specific default value, or return `null` (making the converter type nullable: `EnumName?`).
+  - Existing non-`json_annotation` imports are preserved in the rewritten file.
+  - Generated `toJson` in the converter delegates to the enum's own `toJson()` — no duplicated logic.
+  - Available in the Command Palette and editor right-click menu for Dart files.
+
+- **Extension settings** — all three JSON Enum Generator options are now configurable as persistent defaults in `File > Preferences > Settings` under **Flutter Genius**:
+  - `flutterGenius.jsonEnum.caseFormat` — default @JsonValue case format (default: `snake_case`).
+  - `flutterGenius.jsonEnum.generateConverter` — whether to generate a converter class by default (default: `true`).
+  - `flutterGenius.jsonEnum.nullHandling` — default null-handling strategy (default: `firstValue`).
+  - The QuickPick for each option shows the saved default at the top marked with **✦ saved default**.
+
+---
+
 ## [0.2.4] — 2026-02-27
 
 ### Added
