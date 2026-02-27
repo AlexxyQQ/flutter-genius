@@ -1,16 +1,25 @@
 /**
  * entity_separator.ts
  * ----------------
- * Splits a Dart file that contains multiple declarations (entities, enums, mixins)
- * into individual files.
+ * Core logic for splitting a Dart file that contains multiple declarations
+ * (classes, enums, mixins) into individual files.
  *
- * Rules:
- *   - Enums          → lib/config/constants/enums/app_specifics/<snake_name>.dart
- *   - Other entities → same directory as the original file, <snake_name>.dart
- *   - Main entity    → stays in the original file (rewritten with proper imports)
+ * Two public entry points:
  *
- * After separation the original file is rewritten to contain only the main entity
- * class plus the necessary imports for everything that was moved out.
+ *   separateDeclarations()
+ *     One declaration stays in the original file (the "primary"); everything
+ *     else is extracted. Used by both the entity→model command and the
+ *     standalone class separator command.
+ *
+ *   separateAllToBarrel()
+ *     Every declaration is extracted to its own file. The original file is
+ *     rewritten as a barrel that re-exports the in-directory files.
+ *     Enum files (moved to lib/config/constants/enums/app_specifics/) are
+ *     noted in a comment but not re-exported from the barrel.
+ *
+ * Routing rules:
+ *   - Enums → lib/config/constants/enums/app_specifics/<snake_name>.dart
+ *   - Everything else → same directory as the original file, <snake_name>.dart
  */
 
 import * as vscode from "vscode";
@@ -25,7 +34,7 @@ import { toSnakeCase } from "./string_utils";
 
 /**
  * Locates the `lib/` directory by walking up from the given file path.
- * Returns null if no `lib/` ancestor is found.
+ * Returns null if no `lib/` ancestor directory is found.
  */
 export function findLibRoot(filePath: string): string | null {
   const parts = filePath.split(path.sep);
@@ -37,89 +46,164 @@ export function findLibRoot(filePath: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Public Main Function
+// Public Entry Point 1 — keep one class, extract the rest
 // ---------------------------------------------------------------------------
 
 /**
- * Separates declarations from a multi-declaration file into individual files.
+ * Extracts all declarations except `primaryName` into individual files.
+ * The primary declaration stays in the original file (rewritten with proper
+ * imports pointing to the extracted files).
  *
- * @param document         The VS Code document being edited.
- * @param declarations     All declarations found by getAllDeclarations().
- * @param mainEntityName   The entity the user wants to convert (stays in original file).
+ * @param document        The VS Code document being edited.
+ * @param declarations    All declarations found by getAllDeclarations().
+ * @param primaryName     The declaration to keep in the original file.
  * @param originalFilePath Absolute path of the original file.
- * @returns A map of declaration name → absolute path where it was written.
- *          The main entity maps to the original file path.
+ * @returns Map of declaration name → absolute path where it was written.
  */
 export async function separateDeclarations(
   document: vscode.TextDocument,
   declarations: DeclarationInfo[],
-  mainEntityName: string,
+  primaryName: string,
   originalFilePath: string
 ): Promise<Map<string, string>> {
   const originalDir = path.dirname(originalFilePath);
   const libRoot = findLibRoot(originalFilePath);
 
-  // ── Step 1: Resolve the output path for each declaration ──────────────────
-  // name → absolute file path
-  const filePathMap = new Map<string, string>();
+  // ── Step 1: Resolve output paths ──────────────────────────────────────────
+  const filePathMap = buildFilePathMap(declarations, primaryName, originalFilePath, originalDir, libRoot);
 
+  // ── Step 2: Write each non-primary declaration to its own file ────────────
   for (const decl of declarations) {
-    if (decl.type === "class" && decl.name === mainEntityName) {
-      // Main entity stays in the original file
-      filePathMap.set(decl.name, originalFilePath);
-      continue;
+    if (decl.name === primaryName) {
+      continue; // Handled in step 3
     }
-
-    if (decl.type === "enum") {
-      // Enums go to lib/config/constants/enums/app_specifics/
-      const enumDir = libRoot
-        ? path.join(libRoot, "config", "constants", "enums", "app_specifics")
-        : path.join(originalDir, "enums");
-      filePathMap.set(decl.name, path.join(enumDir, `${toSnakeCase(decl.name)}.dart`));
-    } else {
-      // Other classes/mixins go to the same directory as the original file
-      filePathMap.set(decl.name, path.join(originalDir, `${toSnakeCase(decl.name)}.dart`));
-    }
-  }
-
-  // ── Step 2: Write each separated declaration to its own file ──────────────
-  for (const decl of declarations) {
-    if (decl.type === "class" && decl.name === mainEntityName) {
-      continue; // Handled in step 3 (rewrite)
-    }
-
     const targetPath = filePathMap.get(decl.name)!;
-    const targetDir = path.dirname(targetPath);
-    const fileName = path.basename(targetPath);
-
-    const content = buildFileContent(decl, fileName, targetDir, filePathMap);
+    const content = buildFileContent(decl, path.basename(targetPath), path.dirname(targetPath), filePathMap);
     await writeFile(targetPath, content);
   }
 
-  // ── Step 3: Rewrite the original file with only the main entity ───────────
-  const mainDecl = declarations.find(
-    (d) => d.type === "class" && d.name === mainEntityName
-  );
-
-  if (mainDecl) {
-    const mainFileName = path.basename(originalFilePath);
-    const content = buildFileContent(mainDecl, mainFileName, originalDir, filePathMap);
-
-    // Apply the edit in-place so the open editor reflects the change immediately
-    const edit = new vscode.WorkspaceEdit();
-    const fullRange = new vscode.Range(
-      document.positionAt(0),
-      document.positionAt(document.getText().length)
+  // ── Step 3: Rewrite original file with only the primary + imports ─────────
+  const primaryDecl = declarations.find((d) => d.name === primaryName);
+  if (primaryDecl) {
+    const content = buildFileContent(
+      primaryDecl,
+      path.basename(originalFilePath),
+      originalDir,
+      filePathMap
     );
-    edit.replace(document.uri, fullRange, content);
-    await vscode.workspace.applyEdit(edit);
+    await applyDocumentEdit(document, content);
   }
 
   return filePathMap;
 }
 
 // ---------------------------------------------------------------------------
-// Private Helpers
+// Public Entry Point 2 — extract ALL, turn original into barrel
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts every declaration to its own file.
+ * The original file is rewritten as a Dart barrel that re-exports all
+ * in-directory files. Enum files (moved to a different directory) are noted
+ * in a comment but not re-exported.
+ *
+ * @param document        The VS Code document being edited.
+ * @param declarations    All declarations found by getAllDeclarations().
+ * @param originalFilePath Absolute path of the original file.
+ */
+export async function separateAllToBarrel(
+  document: vscode.TextDocument,
+  declarations: DeclarationInfo[],
+  originalFilePath: string
+): Promise<void> {
+  const originalDir = path.dirname(originalFilePath);
+  const libRoot = findLibRoot(originalFilePath);
+
+  // ── Step 1: Resolve output paths (no primary — every decl is extracted) ───
+  const filePathMap = buildFilePathMap(
+    declarations,
+    null,     // null = extract everything
+    originalFilePath,
+    originalDir,
+    libRoot
+  );
+
+  // ── Step 2: Write every declaration to its own file ───────────────────────
+  for (const decl of declarations) {
+    const targetPath = filePathMap.get(decl.name)!;
+    const content = buildFileContent(
+      decl,
+      path.basename(targetPath),
+      path.dirname(targetPath),
+      filePathMap
+    );
+    await writeFile(targetPath, content);
+  }
+
+  // ── Step 3: Rewrite original as a barrel ──────────────────────────────────
+  const lines: string[] = [
+    "// Barrel file — re-exports all separated declarations.",
+    "// Note: enums were moved to lib/config/constants/enums/app_specifics/",
+    "//       and are not re-exported here.",
+    "",
+  ];
+
+  for (const [name, filePath] of filePathMap) {
+    const decl = declarations.find((d) => d.name === name);
+    // Only export files in the same directory (skip enums at a different path)
+    if (decl && decl.type !== "enum") {
+      const rel = getRelativeImportPath(originalDir, filePath);
+      lines.push(`export '${rel}';`);
+    }
+  }
+
+  lines.push("");
+  await applyDocumentEdit(document, lines.join("\n"));
+}
+
+// ---------------------------------------------------------------------------
+// Private — Path Resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the name → absolute-path map for all declarations.
+ *
+ * @param primaryName  The name of the class that stays in the original file,
+ *                     or null when extracting everything (barrel mode).
+ */
+function buildFilePathMap(
+  declarations: DeclarationInfo[],
+  primaryName: string | null,
+  originalFilePath: string,
+  originalDir: string,
+  libRoot: string | null
+): Map<string, string> {
+  const map = new Map<string, string>();
+
+  for (const decl of declarations) {
+    if (decl.name === primaryName) {
+      // Primary stays in the original file
+      map.set(decl.name, originalFilePath);
+      continue;
+    }
+
+    if (decl.type === "enum") {
+      // Enums → lib/config/constants/enums/app_specifics/
+      const enumDir = libRoot
+        ? path.join(libRoot, "config", "constants", "enums", "app_specifics")
+        : path.join(originalDir, "enums");
+      map.set(decl.name, path.join(enumDir, `${toSnakeCase(decl.name)}.dart`));
+    } else {
+      // All other declarations → same directory
+      map.set(decl.name, path.join(originalDir, `${toSnakeCase(decl.name)}.dart`));
+    }
+  }
+
+  return map;
+}
+
+// ---------------------------------------------------------------------------
+// Private — File Content Builder
 // ---------------------------------------------------------------------------
 
 /**
@@ -128,10 +212,10 @@ export async function separateDeclarations(
  * Import strategy:
  *   - Freezed classes always get `freezed_annotation`.
  *   - Enums with @JsonEnum / JsonConverter get `json_annotation`.
- *   - Any other separated declaration that is referenced by name in the body
+ *   - Any other separated declaration referenced by name in the body
  *     gets a relative import.
  *   - Freezed classes get `part '*.freezed.dart'`.
- *   - Classes with @JsonSerializable or JsonConverter get `part '*.g.dart'`.
+ *   - @JsonSerializable / JsonConverter classes get `part '*.g.dart'`.
  */
 function buildFileContent(
   decl: DeclarationInfo,
@@ -156,14 +240,11 @@ function buildFileContent(
 
   // ── Relative imports for referenced declarations ──────────────────────────
   for (const [refName, refPath] of allFilePaths) {
-    // Skip self-reference
     if (refName === decl.name) {
-      continue;
+      continue; // No self-import
     }
-    // Only add if the body actually mentions this name
-    // Use word-boundary check to avoid false matches inside longer names
-    const wordBoundaryRegex = new RegExp(`\\b${refName}\\b`);
-    if (wordBoundaryRegex.test(decl.body)) {
+    // Only import if the body actually uses this name
+    if (new RegExp(`\\b${refName}\\b`).test(decl.body)) {
       const rel = getRelativeImportPath(fileDir, refPath);
       lines.push(`import '${rel}';`);
     }
@@ -192,4 +273,22 @@ function buildFileContent(
   lines.push("");
 
   return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Private — Editor Helpers
+// ---------------------------------------------------------------------------
+
+/** Replaces the entire document content with `content` using a workspace edit. */
+async function applyDocumentEdit(
+  document: vscode.TextDocument,
+  content: string
+): Promise<void> {
+  const edit = new vscode.WorkspaceEdit();
+  const fullRange = new vscode.Range(
+    document.positionAt(0),
+    document.positionAt(document.getText().length)
+  );
+  edit.replace(document.uri, fullRange, content);
+  await vscode.workspace.applyEdit(edit);
 }

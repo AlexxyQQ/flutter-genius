@@ -132,15 +132,15 @@ export async function generateEntityToModelCommand(): Promise<void> {
 
     } else {
       // ── NO: keep all entities in one file → combined model ────────────────
-      const entityDecls = allDeclarations.filter(
-        (d) => d.type === "class" && d.name.endsWith("Entity")
-      );
+      // Include ALL classes (not just Entity-named) so that helper classes like
+      // "Address" also become models alongside "ProfileSettingsEntity".
+      const entityDecls = allDeclarations.filter((d) => d.type === "class");
 
       if (entityDecls.length > 1) {
         await generateCombinedModel(entityDecls, filePath, entityDir);
         return; // Done — skip the single-entity path below
       }
-      // Single entity with non-entity declarations: fall through
+      // Single class with non-class declarations (e.g. only enums): fall through
     }
   }
 
@@ -204,8 +204,17 @@ async function generateSingleModel(
 // ---------------------------------------------------------------------------
 
 /**
- * Generates a single combined model file for ALL entity classes found in the
- * source file. Called when the user chooses "No" and the file has >1 entity.
+ * Generates a single combined model file for ALL class declarations found in
+ * the source file. Called when the user chooses "No" and the file has >1 class.
+ *
+ * Model name derivation:
+ *   - "FooEntity"  → "FooModel"   (drop Entity suffix, add Model)
+ *   - "Address"    → "AddressModel" (no Entity suffix → append Model)
+ *
+ * Cross-class field enrichment:
+ *   After extracting fields for each class, any field whose cleanType matches
+ *   another class in the same file is marked isEntity:true with an explicit
+ *   modelType so the template uses "AddressModel" instead of "Address".
  */
 async function generateCombinedModel(
   entityDecls: DeclarationInfo[],
@@ -215,42 +224,68 @@ async function generateCombinedModel(
   const specs: ModelSpec[] = [];
   const allUnannotatedEnums: string[] = [];
 
+  // Build a lookup of className → modelClassName for all classes in the file.
+  // This allows us to resolve cross-class references during field enrichment.
+  const classToModelName = new Map<string, string>(
+    entityDecls.map((d) => [
+      d.name,
+      d.name.endsWith("Entity")
+        ? d.name.replace(/Entity$/, "Model")
+        : `${d.name}Model`,
+    ])
+  );
+
   for (const decl of entityDecls) {
     const isFreezed = decl.isFreezed;
     let fields = extractFields(decl.body, isFreezed);
 
     if (fields.length === 0) {
-      continue; // Skip empty entities rather than aborting everything
+      continue; // Skip empty classes rather than aborting everything
     }
 
-    // Detect enums — run for each entity separately
+    // ── Detect enums ─────────────────────────────────────────────────────────
     fields = await Promise.all(
       fields.map((f) => enrichFieldWithEnumInfo(f, allUnannotatedEnums))
     );
 
-    // Convert plain entity to Freezed in-place if needed
-    // (only for the entities that are plain — others keep their current form)
+    // ── Cross-class enrichment ────────────────────────────────────────────────
+    // If a field's clean type is another class in this file (e.g. "Address"),
+    // mark it as entity-like and supply an explicit modelType override
+    // (e.g. "AddressModel" or "List<AddressModel>").
+    fields = fields.map((f) => {
+      if (f.isEntity || f.isEnum || f.isMap) {
+        return f; // Already handled or not applicable
+      }
+      const modelName = classToModelName.get(f.cleanType);
+      if (!modelName) {
+        return f; // Not a sibling class — leave unchanged
+      }
+      // Replace the clean type with its model counterpart in the full type string.
+      const modelType = f.type.replace(
+        new RegExp(`\\b${f.cleanType}\\b`, "g"),
+        modelName
+      );
+      return { ...f, isEntity: true, modelType };
+    });
+
+    // ── Warn about plain classes (can't auto-convert in a multi-class file) ──
     if (!isFreezed) {
-      // We can't easily rewrite individual classes within a multi-class file,
-      // so we just use the parsed fields and note this in the TODO reminder.
       vscode.window.showWarningMessage(
-        `"${decl.name}" is a plain Dart class. Add @freezed manually or run the command with "Yes" to separate.`
+        `"${decl.name}" is a plain Dart class. Add @freezed manually or run the command with "Yes" to separate first.`
       );
     }
 
-    specs.push({
-      modelClass: decl.name.replace("Entity", "Model"),
-      entityClass: decl.name,
-      fields,
-    });
+    const modelClass = classToModelName.get(decl.name)!;
+    specs.push({ modelClass, entityClass: decl.name, fields });
   }
 
   if (specs.length === 0) {
-    vscode.window.showErrorMessage("No fields found in any entity class.");
+    vscode.window.showErrorMessage("No fields found in any class.");
     return;
   }
 
-  // Resolve output path — name the combined file after the source file
+  // ── Resolve output path ───────────────────────────────────────────────────
+  // Name the combined file after the source file.
   const modelDir = resolveModelDirectory(entityDir);
   const sourceBaseName = path.basename(filePath, ".dart"); // e.g. "test_entity"
   const modelBaseName = sourceBaseName.endsWith("_entity")
@@ -263,12 +298,7 @@ async function generateCombinedModel(
   const content = generateCombinedFreezedModelContent(specs, importPath, modelFileName);
   const allModels = specs.map((s) => s.modelClass).join(", ");
 
-  await writeAndOpen(
-    modelFilePath,
-    content,
-    allModels,
-    allUnannotatedEnums
-  );
+  await writeAndOpen(modelFilePath, content, allModels, allUnannotatedEnums);
 }
 
 // ---------------------------------------------------------------------------

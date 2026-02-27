@@ -189,7 +189,9 @@ extension ${entityClass}ListMapper on List<${entityClass}> {
 function buildFactoryParams(fields: FieldInfo[]): string {
   return fields
     .map((f) => {
-      const fieldType = f.isEntity ? f.type.replace(/Entity/g, "Model") : f.type;
+      // modelType is an explicit override (e.g. "AddressModel" for a plain "Address" class).
+      // Fall back to the automatic Entity→Model substitution for Entity-named types.
+      const fieldType = f.modelType ?? (f.isEntity ? f.type.replace(/Entity/g, "Model") : f.type);
 
       const annotations: string[] = [];
 

@@ -15,6 +15,7 @@
 
 import * as vscode from "vscode";
 import { generateEntityToModelCommand } from "./commands/generate_entity_to_model";
+import { separateClassesCommand } from "./commands/separate_classes";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("Flutter Genius is now active.");
@@ -28,6 +29,18 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "flutter-genius.generateEntityToModel",
       generateEntityToModelCommand,
+    ),
+  );
+
+  // -------------------------------------------------------------------------
+  // Class Separator
+  // Splits a multi-declaration Dart file into individual files.
+  // Works on any Dart file — not just entity files.
+  // -------------------------------------------------------------------------
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "flutter-genius.separateClasses",
+      separateClassesCommand,
     ),
   );
 }

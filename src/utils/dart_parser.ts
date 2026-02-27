@@ -43,6 +43,14 @@ export interface FieldInfo {
   isEnum?: boolean;
   /** The JsonConverter class name if one exists for this enum type. */
   converterName?: string;
+  /**
+   * Override type for the model side when the class does not end in "Entity"
+   * (e.g. "Address" → modelType: "AddressModel",
+   *        "List<Address>" → modelType: "List<AddressModel>").
+   * When set, this is used in the generated factory params instead of the
+   * automatic Entity→Model substitution.
+   */
+  modelType?: string;
 }
 
 /** Represents a class found in the active document (used for entity→model). */
@@ -429,14 +437,46 @@ function extractPlainFields(classBody: string): FieldInfo[] {
 /**
  * Extracts default parameter values from "this.field = value" patterns
  * inside a constructor.
+ *
+ * Uses bracket-aware scanning so complex defaults like
+ *   this.tags = const ['a', 'b', 'c']
+ *   this.meta = const [{'x': 1}, {'y': 2}]
+ * are captured in full rather than stopping at the first inner comma or ")".
  */
 function extractConstructorDefaults(classBody: string): Record<string, string> {
   const defaults: Record<string, string> = {};
-  const defaultRegex = /this\.(\w+)\s*=\s*([^,)]+)/g;
+
+  // Match "this.fieldName = " then use bracket-aware scanning for the value.
+  const thisAssignRegex = /\bthis\.(\w+)\s*=\s*/g;
   let match: RegExpExecArray | null;
 
-  while ((match = defaultRegex.exec(classBody)) !== null) {
-    defaults[match[1]] = match[2].trim();
+  while ((match = thisAssignRegex.exec(classBody)) !== null) {
+    const name = match[1];
+    const valueStart = match.index + match[0].length;
+
+    // Scan forward, tracking bracket depth.
+    // Stop at an unbracketed "," or ")".
+    let depth = 0;
+    let i = valueStart;
+
+    for (; i < classBody.length; i++) {
+      const ch = classBody[i];
+      if (ch === "(" || ch === "[" || ch === "{") {
+        depth++;
+      } else if (ch === ")" || ch === "]" || ch === "}") {
+        if (depth === 0) {
+          break; // Unbracketed closing delimiter — end of value
+        }
+        depth--;
+      } else if (ch === "," && depth === 0) {
+        break; // Unbracketed comma — end of value
+      }
+    }
+
+    const value = classBody.substring(valueStart, i).trim();
+    if (value) {
+      defaults[name] = value;
+    }
   }
 
   return defaults;

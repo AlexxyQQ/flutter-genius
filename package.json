@@ -50,6 +50,10 @@
       {
         "command": "flutter-genius.generateEntityToModel",
         "title": "Flutter Genius: Generate Model from Entity"
+      },
+      {
+        "command": "flutter-genius.separateClasses",
+        "title": "Flutter Genius: Separate Classes"
       }
     ],
     "menus": {
@@ -59,6 +63,11 @@
           "command": "flutter-genius.generateEntityToModel",
           "when": "editorLangId == dart",
           "group": "flutter-genius@1"
+        },
+        {
+          "command": "flutter-genius.separateClasses",
+          "when": "editorLangId == dart",
+          "group": "flutter-genius@2"
         }
       ]
     }
