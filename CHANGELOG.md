@@ -4,6 +4,25 @@ All notable changes to Flutter Genius are documented here.
 
 ---
 
+## [0.2.6] — 2026-02-27
+
+### Added
+
+- **Entity → Model settings** — six new settings under `flutterGenius.entityToModel.*` in `File > Preferences > Settings`:
+  - `outputPath` — where the model file is written: `domainToData` (Clean Architecture default, `domain/entities → data/models`) or `sameDirectory` (next to the entity).
+  - `autoConvertToFreezed` — whether plain entities are converted to Freezed: `always` (default), `ask` (QuickPick before converting), or `never` (skip conversion).
+  - `fieldRename` — `@JsonSerializable` field rename strategy: `snake` (default), `none`, `pascal`, or `kebab`.
+  - `explicitToJson` — whether to include `explicitToJson: true` in `@JsonSerializable` (default: `true`).
+  - `generateListMappers` — whether to emit the `List<Model>.toEntities()` / `List<Entity>.toModels()` helper extensions (default: `true`).
+  - `jsonKeyHelpers` — whether to add `@JsonKey(fromJson: ModelGeneratorHelper.generate...)` for `id`, `createdAt`, and `updatedAt` (default: `true`).
+
+### Changed
+
+- `freezed_model.ts` now accepts a `ModelGenerationOptions` object so all six of the above options flow through to the template. Defaults are backward-compatible — existing generated output is unchanged unless settings are modified.
+- `generate_entity_to_model.ts` reads all settings from configuration at the start of each command invocation and passes them to the template; the `autoConvertToFreezed: "ask"` path shows an inline QuickPick.
+
+---
+
 ## [0.2.5] — 2026-02-27
 
 ### Added

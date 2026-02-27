@@ -12,7 +12,7 @@
     "type": "git",
     "url": "https://github.com/AlexxyQQ/flutter-genius"
   },
-  "version": "0.2.5",
+  "version": "0.2.6",
   "engines": {
     "vscode": "^1.87.0"
   },
@@ -83,6 +83,66 @@
     "configuration": {
       "title": "Flutter Genius",
       "properties": {
+        "flutterGenius.entityToModel.outputPath": {
+          "type": "string",
+          "enum": [
+            "domainToData",
+            "sameDirectory"
+          ],
+          "enumDescriptions": [
+            "domain/entities → data/models  (Clean Architecture default)",
+            "Model file is placed in the same directory as the entity"
+          ],
+          "default": "domainToData",
+          "description": "Where the generated model file is written, relative to the source entity file."
+        },
+        "flutterGenius.entityToModel.autoConvertToFreezed": {
+          "type": "string",
+          "enum": [
+            "always",
+            "ask",
+            "never"
+          ],
+          "enumDescriptions": [
+            "Automatically convert plain Dart entities to Freezed in-place",
+            "Ask before converting a plain entity to Freezed",
+            "Never convert — generate the model without touching the entity"
+          ],
+          "default": "always",
+          "description": "Controls whether plain (non-Freezed) entity classes are automatically converted to Freezed before the model is generated."
+        },
+        "flutterGenius.entityToModel.fieldRename": {
+          "type": "string",
+          "enum": [
+            "snake",
+            "none",
+            "pascal",
+            "kebab"
+          ],
+          "enumDescriptions": [
+            "myField → my_field  (FieldRename.snake)",
+            "myField → myField  (no renaming)",
+            "myField → MyField  (FieldRename.pascal)",
+            "myField → my-field (FieldRename.kebab)"
+          ],
+          "default": "snake",
+          "description": "fieldRename value used in @JsonSerializable on the generated model."
+        },
+        "flutterGenius.entityToModel.explicitToJson": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to add explicitToJson: true to @JsonSerializable. Required when the model has nested objects."
+        },
+        "flutterGenius.entityToModel.generateListMappers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to generate List<Model>.toEntities() and List<Entity>.toModels() helper extensions."
+        },
+        "flutterGenius.entityToModel.jsonKeyHelpers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to add @JsonKey(fromJson: ModelGeneratorHelper.generate...) for the special fields id, createdAt, and updatedAt."
+        },
         "flutterGenius.jsonEnum.caseFormat": {
           "type": "string",
           "enum": [

@@ -19,6 +19,8 @@
  *
  *   4. Extract fields, detect enums, optionally convert plain → Freezed.
  *   5. Write the model file and open it.
+ *
+ * Behaviour is controlled by extension settings under flutterGenius.entityToModel.*
  */
 
 import * as vscode from "vscode";
@@ -39,6 +41,7 @@ import { generateFreezedEntityContent } from "../templates/freezed_entity";
 import {
   generateFreezedModelContent,
   generateCombinedFreezedModelContent,
+  ModelGenerationOptions,
   ModelSpec,
 } from "../templates/freezed_model";
 
@@ -50,6 +53,19 @@ const PRIMITIVE_TYPES = new Set([
 ]);
 
 // ---------------------------------------------------------------------------
+// Settings Types
+// ---------------------------------------------------------------------------
+
+type OutputPath = "domainToData" | "sameDirectory";
+type AutoConvert = "always" | "ask" | "never";
+
+interface CommandSettings {
+  outputPath: OutputPath;
+  autoConvertToFreezed: AutoConvert;
+  modelOptions: ModelGenerationOptions;
+}
+
+// ---------------------------------------------------------------------------
 // Command Entry Point
 // ---------------------------------------------------------------------------
 
@@ -58,15 +74,29 @@ const PRIMITIVE_TYPES = new Set([
  */
 export async function generateEntityToModelCommand(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    return;
-  }
+  if (!editor) return;
 
   const document = editor.document;
   const filePath = document.uri.fsPath;
   const entityDir = path.dirname(filePath);
 
-  // ── Step 1: Find the entity class at the cursor ────────────────────────────
+  // ── Read extension settings ───────────────────────────────────────────────
+  const cfg = vscode.workspace.getConfiguration("flutterGenius");
+
+  const settings: CommandSettings = {
+    outputPath: cfg.get<OutputPath>("entityToModel.outputPath", "domainToData"),
+    autoConvertToFreezed: cfg.get<AutoConvert>("entityToModel.autoConvertToFreezed", "always"),
+    modelOptions: {
+      fieldRename: cfg.get<"snake" | "none" | "pascal" | "kebab">(
+        "entityToModel.fieldRename", "snake"
+      ),
+      explicitToJson: cfg.get<boolean>("entityToModel.explicitToJson", true),
+      generateListMappers: cfg.get<boolean>("entityToModel.generateListMappers", true),
+      jsonKeyHelpers: cfg.get<boolean>("entityToModel.jsonKeyHelpers", true),
+    },
+  };
+
+  // ── Step 1: Find the entity class at the cursor ───────────────────────────
   const cursorPosition = editor.selection.active;
   const classInfo = getClassAtPosition(document, cursorPosition);
 
@@ -84,7 +114,7 @@ export async function generateEntityToModelCommand(): Promise<void> {
     return;
   }
 
-  // ── Step 2: Check for other declarations in the file ──────────────────────
+  // ── Step 2: Check for other declarations in the file ─────────────────────
   const allDeclarations = getAllDeclarations(document.getText());
   const otherDeclarations = allDeclarations.filter((d) => d.name !== className);
 
@@ -118,53 +148,39 @@ export async function generateEntityToModelCommand(): Promise<void> {
       }
     );
 
-    if (!choice) {
-      return; // User dismissed
-    }
+    if (!choice) return;
 
     if (choice.value === "yes") {
-      // ── YES: separate → then generate model for the main entity only ──────
       await separateDeclarations(document, allDeclarations, className, filePath);
       vscode.window.showInformationMessage(
         `Separated ${otherDeclarations.length} declaration(s). Generating model for "${className}"...`
       );
-      // Fall through to single-entity model generation below.
-
     } else {
-      // ── NO: keep all entities in one file → combined model ────────────────
-      // Include ALL classes (not just Entity-named) so that helper classes like
-      // "Address" also become models alongside "ProfileSettingsEntity".
       const entityDecls = allDeclarations.filter((d) => d.type === "class");
 
       if (entityDecls.length > 1) {
-        await generateCombinedModel(entityDecls, filePath, entityDir);
-        return; // Done — skip the single-entity path below
+        await generateCombinedModel(entityDecls, filePath, entityDir, settings);
+        return;
       }
-      // Single class with non-class declarations (e.g. only enums): fall through
     }
   }
 
   // ── Steps 3–8: Single-entity model generation ─────────────────────────────
-  await generateSingleModel(className, classBody, isFreezed, filePath, entityDir);
+  await generateSingleModel(className, classBody, isFreezed, filePath, entityDir, settings);
 }
 
 // ---------------------------------------------------------------------------
 // Single-entity model generation
 // ---------------------------------------------------------------------------
 
-/**
- * Generates a model file for one entity class.
- * Handles field extraction, enum detection, plain→Freezed conversion,
- * path resolution, file write, and opening the result.
- */
 async function generateSingleModel(
   className: string,
   classBody: string,
   isFreezed: boolean,
   filePath: string,
-  entityDir: string
+  entityDir: string,
+  settings: CommandSettings,
 ): Promise<void> {
-  // Extract and enrich fields
   let fields = extractFields(classBody, isFreezed);
   if (fields.length === 0) {
     vscode.window.showErrorMessage(`No fields found in "${className}".`);
@@ -176,24 +192,54 @@ async function generateSingleModel(
     fields.map((f) => enrichFieldWithEnumInfo(f, unannotatedEnums))
   );
 
-  // Convert plain entity to Freezed in-place if needed
+  // ── Auto-convert plain entity to Freezed ──────────────────────────────────
   if (!isFreezed) {
-    const entityFileName = path.basename(filePath);
-    await writeFile(filePath, generateFreezedEntityContent(className, entityFileName, fields));
-    vscode.window.showInformationMessage(
-      `Converted "${className}" to a Freezed entity. Run build_runner to regenerate parts.`
-    );
+    const { autoConvertToFreezed } = settings;
+
+    let shouldConvert = autoConvertToFreezed === "always";
+
+    if (autoConvertToFreezed === "ask") {
+      const answer = await vscode.window.showQuickPick(
+        [
+          {
+            label: "$(check)  Yes — convert to Freezed",
+            description: "Rewrites the entity file with @freezed in-place",
+            value: true,
+          },
+          {
+            label: "$(close)  No — leave as plain Dart class",
+            description: "Model will still be generated",
+            value: false,
+          },
+        ],
+        {
+          title: `Flutter Genius: "${className}" is not Freezed`,
+          placeHolder: "Convert the entity to a Freezed class?",
+          ignoreFocusOut: true,
+        }
+      );
+      if (!answer) return;
+      shouldConvert = answer.value;
+    }
+
+    if (shouldConvert) {
+      const entityFileName = path.basename(filePath);
+      await writeFile(filePath, generateFreezedEntityContent(className, entityFileName, fields));
+      vscode.window.showInformationMessage(
+        `Converted "${className}" to a Freezed entity. Run build_runner to regenerate parts.`
+      );
+    }
   }
 
-  // Resolve output path
-  const modelDir      = resolveModelDirectory(entityDir);
+  // ── Resolve output path ───────────────────────────────────────────────────
+  const modelDir      = resolveModelDirectory(entityDir, settings.outputPath);
   const modelFileName = `${deriveBaseName(className)}_model.dart`;
   const modelFilePath = path.join(modelDir, modelFileName);
   const modelClass    = className.replace("Entity", "Model");
   const importPath    = getRelativeImportPath(modelDir, filePath);
 
   const content = generateFreezedModelContent(
-    modelClass, className, importPath, modelFileName, fields
+    modelClass, className, importPath, modelFileName, fields, settings.modelOptions
   );
 
   await writeAndOpen(modelFilePath, content, modelClass, unannotatedEnums);
@@ -203,29 +249,15 @@ async function generateSingleModel(
 // Combined multi-entity model generation
 // ---------------------------------------------------------------------------
 
-/**
- * Generates a single combined model file for ALL class declarations found in
- * the source file. Called when the user chooses "No" and the file has >1 class.
- *
- * Model name derivation:
- *   - "FooEntity"  → "FooModel"   (drop Entity suffix, add Model)
- *   - "Address"    → "AddressModel" (no Entity suffix → append Model)
- *
- * Cross-class field enrichment:
- *   After extracting fields for each class, any field whose cleanType matches
- *   another class in the same file is marked isEntity:true with an explicit
- *   modelType so the template uses "AddressModel" instead of "Address".
- */
 async function generateCombinedModel(
   entityDecls: DeclarationInfo[],
   filePath: string,
-  entityDir: string
+  entityDir: string,
+  settings: CommandSettings,
 ): Promise<void> {
   const specs: ModelSpec[] = [];
   const allUnannotatedEnums: string[] = [];
 
-  // Build a lookup of className → modelClassName for all classes in the file.
-  // This allows us to resolve cross-class references during field enrichment.
   const classToModelName = new Map<string, string>(
     entityDecls.map((d) => [
       d.name,
@@ -239,28 +271,16 @@ async function generateCombinedModel(
     const isFreezed = decl.isFreezed;
     let fields = extractFields(decl.body, isFreezed);
 
-    if (fields.length === 0) {
-      continue; // Skip empty classes rather than aborting everything
-    }
+    if (fields.length === 0) continue;
 
-    // ── Detect enums ─────────────────────────────────────────────────────────
     fields = await Promise.all(
       fields.map((f) => enrichFieldWithEnumInfo(f, allUnannotatedEnums))
     );
 
-    // ── Cross-class enrichment ────────────────────────────────────────────────
-    // If a field's clean type is another class in this file (e.g. "Address"),
-    // mark it as entity-like and supply an explicit modelType override
-    // (e.g. "AddressModel" or "List<AddressModel>").
     fields = fields.map((f) => {
-      if (f.isEntity || f.isEnum || f.isMap) {
-        return f; // Already handled or not applicable
-      }
+      if (f.isEntity || f.isEnum || f.isMap) return f;
       const modelName = classToModelName.get(f.cleanType);
-      if (!modelName) {
-        return f; // Not a sibling class — leave unchanged
-      }
-      // Replace the clean type with its model counterpart in the full type string.
+      if (!modelName) return f;
       const modelType = f.type.replace(
         new RegExp(`\\b${f.cleanType}\\b`, "g"),
         modelName
@@ -268,7 +288,6 @@ async function generateCombinedModel(
       return { ...f, isEntity: true, modelType };
     });
 
-    // ── Warn about plain classes (can't auto-convert in a multi-class file) ──
     if (!isFreezed) {
       vscode.window.showWarningMessage(
         `"${decl.name}" is a plain Dart class. Add @freezed manually or run the command with "Yes" to separate first.`
@@ -284,18 +303,18 @@ async function generateCombinedModel(
     return;
   }
 
-  // ── Resolve output path ───────────────────────────────────────────────────
-  // Name the combined file after the source file.
-  const modelDir = resolveModelDirectory(entityDir);
-  const sourceBaseName = path.basename(filePath, ".dart"); // e.g. "test_entity"
+  const modelDir = resolveModelDirectory(entityDir, settings.outputPath);
+  const sourceBaseName = path.basename(filePath, ".dart");
   const modelBaseName = sourceBaseName.endsWith("_entity")
-    ? sourceBaseName.replace(/_entity$/, "_model")    // "test_entity" → "test_model"
+    ? sourceBaseName.replace(/_entity$/, "_model")
     : `${sourceBaseName}_model`;
-  const modelFileName = `${modelBaseName}.dart`;       // e.g. "test_model.dart"
+  const modelFileName = `${modelBaseName}.dart`;
   const modelFilePath = path.join(modelDir, modelFileName);
   const importPath    = getRelativeImportPath(modelDir, filePath);
 
-  const content = generateCombinedFreezedModelContent(specs, importPath, modelFileName);
+  const content = generateCombinedFreezedModelContent(
+    specs, importPath, modelFileName, settings.modelOptions
+  );
   const allModels = specs.map((s) => s.modelClass).join(", ");
 
   await writeAndOpen(modelFilePath, content, allModels, allUnannotatedEnums);
@@ -305,9 +324,6 @@ async function generateCombinedModel(
 // Shared Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Writes a model file, opens it in the editor, and shows the result message.
- */
 async function writeAndOpen(
   modelFilePath: string,
   content: string,
@@ -332,9 +348,6 @@ async function writeAndOpen(
   }
 }
 
-/**
- * Runs enum detection on a field and mutates it with isEnum / converterName.
- */
 async function enrichFieldWithEnumInfo(
   field: FieldInfo,
   unannotatedEnums: string[]
@@ -349,9 +362,7 @@ async function enrichFieldWithEnumInfo(
   }
 
   const analysis = await analyzeTypeForEnum(field.cleanType);
-  if (!analysis.isEnum) {
-    return field;
-  }
+  if (!analysis.isEnum) return field;
 
   field.isEnum = true;
 
@@ -365,16 +376,20 @@ async function enrichFieldWithEnumInfo(
 }
 
 /**
- * Resolves the target model directory given the entity's directory.
+ * Resolves the target model directory given the entity's directory and
+ * the configured output path strategy.
  *
- * Mapping:
- *   .../domain/entities → .../data/models
- *   .../domain/...      → .../data/models
- *   anything else       → sibling "data/models"
+ * "domainToData":  .../domain/entities → .../data/models
+ * "sameDirectory": model is placed next to the entity file
  */
-function resolveModelDirectory(entityDir: string): string {
+function resolveModelDirectory(entityDir: string, outputPath: OutputPath): string {
+  if (outputPath === "sameDirectory") {
+    return entityDir;
+  }
+
+  // "domainToData" — default
   const domainEntities = path.join("domain", "entities");
-  const domain         = "domain";
+  const domain = "domain";
 
   if (entityDir.includes(domainEntities)) {
     return entityDir.replace(domainEntities, path.join("data", "models"));

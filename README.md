@@ -64,11 +64,24 @@ Converts a Clean Architecture entity class into a complete Freezed data model wi
 - `toModel()` extension on `EntityClass` with recursive nested mapping.
 - `List<Model>.toEntities()` and `List<Entity>.toModels()` helper extensions.
 
-> **Bonus:** If your entity is a plain Dart class (not yet Freezed), it is automatically converted to a Freezed entity in-place before the model is generated.
+> **Bonus:** If your entity is a plain Dart class (not yet Freezed), it is automatically converted to a Freezed entity in-place before the model is generated (behaviour controlled by the `autoConvertToFreezed` setting).
 
 **Multi-class files:** If your entity file contains multiple classes or enums, the command asks whether you want to separate them first:
 - **Yes** → separates all declarations into individual files, then generates the model for the primary entity.
 - **No** → generates a single combined model file covering all classes in the file. Plain helper classes (e.g. `Address`) are automatically mapped to their model counterparts (`AddressModel`).
+
+#### Extension Settings
+
+Configure persistent defaults in **File > Preferences > Settings** under **Flutter Genius**:
+
+| Setting | Default | Description |
+|---|---|---|
+| `flutterGenius.entityToModel.outputPath` | `domainToData` | `domainToData` — writes the model to `data/models/` (resolved from `domain/entities/`). `sameDirectory` — places the model next to the entity file. |
+| `flutterGenius.entityToModel.autoConvertToFreezed` | `always` | `always` — converts plain entities to Freezed automatically. `ask` — shows a confirmation QuickPick. `never` — skips conversion. |
+| `flutterGenius.entityToModel.fieldRename` | `snake` | `@JsonSerializable` field rename strategy: `snake`, `none`, `pascal`, or `kebab`. |
+| `flutterGenius.entityToModel.explicitToJson` | `true` | Whether to include `explicitToJson: true` in `@JsonSerializable`. |
+| `flutterGenius.entityToModel.generateListMappers` | `true` | Whether to emit `List<Model>.toEntities()` / `List<Entity>.toModels()` helper extensions. |
+| `flutterGenius.entityToModel.jsonKeyHelpers` | `true` | Whether to add `@JsonKey(fromJson: ModelGeneratorHelper.generate...)` for `id`, `createdAt`, and `updatedAt`. |
 
 ---
 
