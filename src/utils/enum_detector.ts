@@ -5,10 +5,11 @@
  * has a ready-to-use JsonConverter class.
  *
  * Detection strategy:
- *   1. Ignore known primitive / built-in types.
- *   2. Search the workspace for a file named after the type (snake_case).
- *   3. Read the file and confirm "enum TypeName" exists.
- *   4. Check for @JsonEnum annotation and a JsonConverter<TypeName, ...> class.
+ *   1. Reject anything that is not a valid PascalCase Dart type name.
+ *   2. Ignore known primitive / built-in types.
+ *   3. Search the workspace for a file named after the type (snake_case).
+ *   4. Read the file and confirm "enum TypeName" exists.
+ *   5. Check for @JsonEnum annotation and a JsonConverter<TypeName, ...> class.
  */
 
 import * as vscode from "vscode";
@@ -41,6 +42,13 @@ const PRIMITIVE_TYPES = new Set([
   "List", "Map", "Set",
 ]);
 
+/**
+ * Only PascalCase identifiers can be Dart type names.
+ * This guards against fragments like "{'a'" or "[" being passed in from
+ * malformed field parsing, which would produce invalid glob patterns.
+ */
+const VALID_TYPE_NAME = /^[A-Z][a-zA-Z0-9]*$/;
+
 // ---------------------------------------------------------------------------
 // Public Function
 // ---------------------------------------------------------------------------
@@ -54,7 +62,14 @@ const PRIMITIVE_TYPES = new Set([
 export async function analyzeTypeForEnum(typeName: string): Promise<EnumAnalysis> {
   const NOT_ENUM: EnumAnalysis = { isEnum: false, hasConverter: false, converterName: null };
 
-  // Fast-path: skip primitives and domain objects
+  // Guard: reject anything that doesn't look like a valid Dart type identifier.
+  // This prevents malformed fragments (e.g. from complex @Default values) from
+  // being passed to vscode.workspace.findFiles as invalid glob patterns.
+  if (!VALID_TYPE_NAME.test(typeName)) {
+    return NOT_ENUM;
+  }
+
+  // Fast-path: skip known primitives and domain objects
   if (
     PRIMITIVE_TYPES.has(typeName) ||
     typeName.endsWith("Entity") ||
@@ -88,7 +103,7 @@ export async function analyzeTypeForEnum(typeName: string): Promise<EnumAnalysis
     // Look for: class SomeConverter implements JsonConverter<TypeName, ...>
     const converterRegex = new RegExp(
       `class\\s+(\\w+)[^{]*implements[^{]*JsonConverter\\s*<\\s*${typeName}`,
-      "s" // dotAll flag so "." matches newlines
+      "s" // dotAll so "." matches newlines
     );
     const converterMatch = content.match(converterRegex);
     const converterName = converterMatch ? converterMatch[1] : null;

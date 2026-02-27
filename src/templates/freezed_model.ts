@@ -1,37 +1,21 @@
 /**
  * freezed_model.ts
  * ----------------
- * Template that produces a complete Freezed model file from parsed field data.
+ * Templates that produce Freezed model file content from parsed field data.
  *
- * Output shape (based on the Flutter project convention):
+ * Two public entry points:
  *
- *   import 'package:freezed_annotation/freezed_annotation.dart';
- *   import '<relative_path_to_entity>';
- *   // TODO: import nested models here
+ *   generateFreezedModelContent()
+ *     → A complete file with ONE model class. Used when a single entity is
+ *       being converted (either standalone or after file separation).
  *
- *   part 'account_model.freezed.dart';
- *   part 'account_model.g.dart';
+ *   generateCombinedFreezedModelContent()
+ *     → A complete file with MULTIPLE model classes. Used when the user
+ *       chooses NOT to separate a multi-entity source file — all models
+ *       land in one combined file with a single set of part directives.
  *
- *   @freezed
- *   abstract class AccountModel with _$AccountModel {
- *     const AccountModel._();
- *
- *     @JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
- *     const factory AccountModel({
- *       @JsonKey(fromJson: ModelGeneratorHelper.generateUuidFromJson)
- *       required String id,
- *       @AccountTypeConverter() required AccountType type,
- *       DateTime? createdAt,
- *       ...
- *     }) = _AccountModel;
- *
- *     factory AccountModel.fromJson(Map<String, dynamic> json) =>
- *         _$AccountModelFromJson(json);
- *   }
- *
- *   // MODEL -> ENTITY
- *   // ENTITY -> MODEL
- *   // List helpers
+ * Private helpers build the per-class factory params and mapper bodies and
+ * are shared between both entry points.
  */
 
 import { FieldInfo } from "../utils/dart_parser";
@@ -47,11 +31,25 @@ const JSON_KEY_HELPERS: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Public Function
+// Public Interfaces
+// ---------------------------------------------------------------------------
+
+/** All data needed to generate one model class and its mapping extensions. */
+export interface ModelSpec {
+  /** PascalCase model class name  (e.g. "AccountModel"). */
+  modelClass: string;
+  /** PascalCase entity class name (e.g. "AccountEntity"). */
+  entityClass: string;
+  /** Parsed field list from the entity. */
+  fields: FieldInfo[];
+}
+
+// ---------------------------------------------------------------------------
+// Public Functions
 // ---------------------------------------------------------------------------
 
 /**
- * Generates the complete Dart source for a Freezed model file.
+ * Generates a complete Dart file for a SINGLE Freezed model.
  *
  * @param modelClass   PascalCase model class name  (e.g. "AccountModel").
  * @param entityClass  PascalCase entity class name (e.g. "AccountEntity").
@@ -66,11 +64,40 @@ export function generateFreezedModelContent(
   fileName: string,
   fields: FieldInfo[]
 ): string {
-  const baseName = fileName.replace(".dart", "");
+  const spec: ModelSpec = { modelClass, entityClass, fields };
+  return buildFileHeader(importPath, fileName) + buildModelClassSection(spec);
+}
 
-  const factoryParams  = buildFactoryParams(fields);
-  const toEntityBody   = buildToEntityBody(fields);
-  const toModelBody    = buildToModelBody(fields);
+/**
+ * Generates a complete Dart file for MULTIPLE Freezed models from the same
+ * entity source file.
+ *
+ * All models share one set of `part` directives because code generation tools
+ * (build_runner) operate per file.
+ *
+ * @param specs          Array of model specs, one per entity class.
+ * @param entityImportPath Relative path to the shared entity source file.
+ * @param fileName       The combined model .dart filename (e.g. "test_model.dart").
+ */
+export function generateCombinedFreezedModelContent(
+  specs: ModelSpec[],
+  entityImportPath: string,
+  fileName: string
+): string {
+  const header = buildFileHeader(entityImportPath, fileName);
+  const sections = specs.map(buildModelClassSection).join("\n\n");
+  return header + sections + "\n";
+}
+
+// ---------------------------------------------------------------------------
+// Private – File Header
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the top of the model file: imports, TODO reminder, and part directives.
+ */
+function buildFileHeader(importPath: string, fileName: string): string {
+  const baseName = fileName.replace(".dart", "");
 
   return `import 'package:freezed_annotation/freezed_annotation.dart';
 import '${importPath}';
@@ -80,7 +107,25 @@ import '${importPath}';
 part '${baseName}.freezed.dart';
 part '${baseName}.g.dart';
 
-@freezed
+`;
+}
+
+// ---------------------------------------------------------------------------
+// Private – Per-Class Section
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the `@freezed` class, `fromJson` factory, and all four mapping
+ * extensions for a single model. No file-level imports or part directives.
+ */
+function buildModelClassSection(spec: ModelSpec): string {
+  const { modelClass, entityClass, fields } = spec;
+
+  const factoryParams = buildFactoryParams(fields);
+  const toEntityBody  = buildToEntityBody(fields);
+  const toModelBody   = buildToModelBody(fields);
+
+  return `@freezed
 abstract class ${modelClass} with _$${modelClass} {
   const ${modelClass}._();
 
@@ -124,19 +169,18 @@ extension ${modelClass}ListMapper on List<${modelClass}> {
 
 extension ${entityClass}ListMapper on List<${entityClass}> {
   List<${modelClass}> toModels() => map((e) => e.toModel()).toList();
-}
-`;
+}`;
 }
 
 // ---------------------------------------------------------------------------
-// Private Helpers
+// Private – Factory Parameter Builder
 // ---------------------------------------------------------------------------
 
 /**
  * Builds the indented factory constructor parameter list for the model.
  *
  * Rules applied per field:
- *   1. Entity types are renamed to their Model counterparts.
+ *   1. Entity types are renamed to their Model counterparts (Entity → Model).
  *   2. Fields named "id", "createdAt", "updatedAt" get @JsonKey(fromJson: ...).
  *   3. Enum fields with a known converter get @ConverterName().
  *   4. Fields with a default value get @Default(value).
@@ -145,22 +189,20 @@ extension ${entityClass}ListMapper on List<${entityClass}> {
 function buildFactoryParams(fields: FieldInfo[]): string {
   return fields
     .map((f) => {
-      // Swap Entity → Model in the type string
       const fieldType = f.isEntity ? f.type.replace(/Entity/g, "Model") : f.type;
 
       const annotations: string[] = [];
 
-      // @JsonKey for well-known fields (id, createdAt, updatedAt)
+      // Well-known fields that need @JsonKey helpers
       if (JSON_KEY_HELPERS[f.name]) {
         annotations.push(`@JsonKey(fromJson: ${JSON_KEY_HELPERS[f.name]})`);
       }
 
-      // @ConverterName() for enum types that have a JsonConverter
+      // Enum types that have a JsonConverter
       if (f.isEnum && f.converterName) {
         annotations.push(`@${f.converterName}()`);
       }
 
-      // Build the prefix: @Default(...) OR required OR nothing (nullable)
       let prefix = "";
       if (f.defaultValue) {
         annotations.push(`@Default(${f.defaultValue})`);
@@ -168,11 +210,7 @@ function buildFactoryParams(fields: FieldInfo[]): string {
         prefix = "required ";
       }
 
-      // Render annotations on separate lines, indented
-      const annotationLines = annotations
-        .map((a) => `    ${a}`)
-        .join("\n");
-
+      const annotationLines = annotations.map((a) => `    ${a}`).join("\n");
       const paramLine = `    ${prefix}${fieldType} ${f.name},`;
 
       return annotationLines ? `${annotationLines}\n${paramLine}` : paramLine;
@@ -180,9 +218,13 @@ function buildFactoryParams(fields: FieldInfo[]): string {
     .join("\n");
 }
 
+// ---------------------------------------------------------------------------
+// Private – Mapper Body Builders
+// ---------------------------------------------------------------------------
+
 /**
- * Builds the toEntity() return statement body.
- * Nested entity models are mapped recursively via .toEntity() calls.
+ * Builds the `toEntity()` return statement body.
+ * Nested entity models are mapped recursively via `.toEntity()` calls.
  */
 function buildToEntityBody(fields: FieldInfo[]): string {
   return fields
@@ -203,8 +245,8 @@ function buildToEntityBody(fields: FieldInfo[]): string {
 }
 
 /**
- * Builds the toModel() return statement body.
- * Nested entity fields are mapped recursively via .toModel() calls.
+ * Builds the `toModel()` return statement body.
+ * Nested entity fields are mapped recursively via `.toModel()` calls.
  */
 function buildToModelBody(fields: FieldInfo[]): string {
   return fields

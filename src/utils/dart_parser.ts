@@ -57,10 +57,15 @@ export interface ClassInfo {
   end: number;
 }
 
-/** Generic declaration (class | enum | mixin) used by the extract command. */
+/**
+ * Generic declaration (class | enum | mixin) used by the extract/separate command.
+ * The `body` includes any preceding annotations (e.g. `@freezed`) so it can be
+ * written directly to a new file.
+ */
 export interface DeclarationInfo {
   type: "class" | "enum" | "mixin";
   name: string;
+  /** Full text from the first annotation (or class keyword) to the closing brace. */
   body: string;
   isFreezed: boolean;
   start: number;
@@ -150,23 +155,40 @@ export function getClassAtPosition(
 /**
  * Scans an entire Dart source string and returns all top-level class, enum,
  * and mixin declarations with their source text and positions.
+ *
+ * The returned `body` for each declaration includes any preceding annotations
+ * (e.g. `@freezed`, `@JsonEnum`) and the `abstract` modifier so the body can
+ * be written as-is to a new file.
  */
 export function getAllDeclarations(text: string): DeclarationInfo[] {
   const declarations: DeclarationInfo[] = [];
-  const declRegex = /(class|enum|mixin)\s+(\w+)/g;
+
+  // Captures: optional annotations, optional "abstract", the keyword, and the name.
+  // Using a non-capturing prefix for annotations so match[1]=keyword, match[2]=name.
+  // match.index points to the start of the first annotation (or the keyword itself).
+  const declRegex =
+    /(?:@[\w.]+(?:\([^)]*\))?\s*\n\s*)*(?:abstract\s+)?(class|enum|mixin)\s+(\w+)/g;
+
   let match: RegExpExecArray | null;
 
   while ((match = declRegex.exec(text)) !== null) {
     const type = match[1] as "class" | "enum" | "mixin";
     const name = match[2];
-    const startIndex = match.index;
 
-    const openBraceIndex = text.indexOf("{", startIndex);
+    // match.index is where the full match begins (at the first annotation if any,
+    // or at "abstract"/"class"/"enum" otherwise). The body will include annotations.
+    let startIndex = match.index;
+
+    // Find the first "{" that opens this declaration's block.
+    // Start searching after the full match text (past the class name) so we skip
+    // any "{" inside annotation arguments like @JsonEnum({...}).
+    const afterMatchIndex = match.index + match[0].length;
+    const openBraceIndex = text.indexOf("{", afterMatchIndex);
     if (openBraceIndex === -1) {
       continue;
     }
 
-    // Count braces to find the end
+    // Count braces to find the closing "}"
     let openBraces = 1;
     let endIndex = -1;
 
@@ -176,7 +198,6 @@ export function getAllDeclarations(text: string): DeclarationInfo[] {
       } else if (text[i] === "}") {
         openBraces--;
       }
-
       if (openBraces === 0) {
         endIndex = i + 1;
         break;
@@ -188,9 +209,19 @@ export function getAllDeclarations(text: string): DeclarationInfo[] {
     }
 
     const body = text.substring(startIndex, endIndex);
-    const isFreezed = body.includes(`_$${name}`) || text.includes("@freezed");
 
-    declarations.push({ type, name, body, isFreezed, start: startIndex, end: endIndex });
+    // A class is Freezed if it uses the _$ClassName mixin pattern or has @freezed
+    const isFreezed =
+      new RegExp(`with\\s+_\\$${name}`).test(body) || body.includes("@freezed");
+
+    declarations.push({
+      type,
+      name,
+      body,
+      isFreezed,
+      start: startIndex,
+      end: endIndex,
+    });
   }
 
   return declarations;
@@ -231,6 +262,10 @@ export function extractImports(text: string): string[] {
  *     @Default(0) int count,
  *     required String name,
  *   }) = _Foo;
+ *
+ * Uses bracket-aware comma splitting so complex defaults like
+ *   @Default([{'a': 1, 'b': 2}, {'c': 3}])
+ * are not incorrectly split on the inner commas.
  */
 function extractFreezedFields(classBody: string): FieldInfo[] {
   const fields: FieldInfo[] = [];
@@ -244,28 +279,39 @@ function extractFreezedFields(classBody: string): FieldInfo[] {
 
   const paramsBlock = factoryMatch[1];
 
-  // Split on commas — note: this is a simplification; nested generics with
-  // commas (e.g. Map<String, int>) are handled by stripping type annotations
-  // before splitting, which is sufficient for the common Flutter patterns.
-  const params = paramsBlock.split(",");
+  // Use bracket-aware splitting to correctly handle commas inside:
+  //   @Default([...]), @Default({...}), Map<String, int>, etc.
+  const params = splitAtTopLevelCommas(paramsBlock);
 
   for (const param of params) {
-    const trimmed = param.trim();
-    if (!trimmed || trimmed.startsWith("//")) {
+    // Strip single-line (//) comments from the fragment before any processing.
+    // A comment can appear on a line preceding a field within the same comma-separated
+    // segment (e.g. "// bool\n    required bool isActive"). Without stripping, the
+    // whole fragment would be skipped because it starts with "//".
+    const withoutComments = param
+      .split("\n")
+      .map((line) => {
+        const idx = line.indexOf("//");
+        return idx !== -1 ? line.substring(0, idx) : line;
+      })
+      .join("\n")
+      .trim();
+
+    if (!withoutComments) {
       continue;
     }
 
-    // Extract @Default(...) value before stripping annotations
+    // Extract @Default(...) value before stripping other annotations.
+    // We use bracket-aware extraction here too since defaults can be complex.
     let defaultValue: string | undefined;
-    const defaultMatch = trimmed.match(/@Default\(([^)]+)\)/);
+    const defaultMatch = withoutComments.match(/@Default\(.+\)/s);
     if (defaultMatch) {
-      defaultValue = defaultMatch[1];
+      defaultValue = extractDefaultValue(withoutComments);
     }
 
-    // Strip all annotations like @JsonKey(...), @Default(...), @MyAnnotation
-    const noAnnotations = trimmed
-      .replace(/@\w+\([^)]*\)/g, "")
-      .replace(/@\w+/g, "")
+    // Strip all annotations: @Annotation(...) and bare @Annotation
+    const noAnnotations = withoutComments
+      .replace(/@\w[\w.]*(?:\([^)]*\))?/gs, "") // @Name(...) or @Name
       .replace(/^required\s+/, "")
       .trim();
 
@@ -286,6 +332,77 @@ function extractFreezedFields(classBody: string): FieldInfo[] {
   }
 
   return fields;
+}
+
+/**
+ * Splits text on commas that are at depth 0 (not inside brackets/braces/parens/angles).
+ * This correctly handles:
+ *   @Default({'a': 1, 'b': 2})     — commas inside {} don't split
+ *   @Default(['x', 'y'])           — commas inside [] don't split
+ *   Map<String, int>               — commas inside <> don't split
+ */
+function splitAtTopLevelCommas(text: string): string[] {
+  const result: string[] = [];
+  let depth = 0;
+  let current = "";
+
+  for (const ch of text) {
+    if (ch === "(" || ch === "[" || ch === "{" || ch === "<") {
+      depth++;
+      current += ch;
+    } else if (ch === ")" || ch === "]" || ch === "}" || ch === ">") {
+      depth--;
+      current += ch;
+    } else if (ch === "," && depth === 0) {
+      result.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+
+  if (current.trim()) {
+    result.push(current);
+  }
+
+  return result;
+}
+
+/**
+ * Extracts the inner value from an @Default(...) annotation.
+ * Uses bracket-aware parsing to handle nested structures.
+ *
+ * @Default(['a', 'b']) → "['a', 'b']"
+ * @Default({'k': 1})   → "{'k': 1}"
+ * @Default(42)          → "42"
+ */
+function extractDefaultValue(paramText: string): string | undefined {
+  const start = paramText.indexOf("@Default(");
+  if (start === -1) {
+    return undefined;
+  }
+
+  const parenOpen = start + "@Default(".length - 1;
+  let depth = 0;
+  let end = -1;
+
+  for (let i = parenOpen; i < paramText.length; i++) {
+    if (paramText[i] === "(") {
+      depth++;
+    } else if (paramText[i] === ")") {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+
+  if (end === -1) {
+    return undefined;
+  }
+
+  return paramText.substring(parenOpen + 1, end).trim();
 }
 
 /**
@@ -329,10 +446,10 @@ function extractConstructorDefaults(classBody: string): Record<string, string> {
  * Builds a FieldInfo from a raw Dart type string and a field name.
  *
  * Handles:
- *   - Nullable types:        "String?"        → isNullable: true, cleanType: "String"
- *   - List types:            "List<BankEntity>"→ isList: true, cleanType: "BankEntity"
- *   - Map types:             "Map<String, int>"→ isMap: true, cleanType: "int"
- *   - Entity types:          "BankEntity"      → isEntity: true
+ *   - Nullable types:        "String?"         → isNullable: true, cleanType: "String"
+ *   - List types:            "List<BankEntity>" → isList: true, cleanType: "BankEntity"
+ *   - Map types:             "Map<String, int>" → isMap: true, cleanType: "int"
+ *   - Entity types:          "BankEntity"       → isEntity: true
  */
 function buildFieldInfo(
   rawType: string,
