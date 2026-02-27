@@ -1,20 +1,19 @@
 /**
- * Utility functions for string manipulation.
+ * string_utils.ts
+ * ----------------
+ * General-purpose string manipulation utilities used across the extension.
  */
 
 /**
  * Converts a PascalCase or camelCase string to snake_case.
- * * Examples:
- * - 'UserEntity' -> 'user_entity'
- * - 'myVarName'  -> 'my_var_name'
  *
- * @param str The input string (usually a class name).
- * @returns The snake_case version of the string.
+ * Examples:
+ *   'AccountEntity' → 'account_entity'
+ *   'myVarName'     → 'my_var_name'
+ *   'BankModel'     → 'bank_model'
  */
 export function toSnakeCase(str: string): string {
-    return str
-        // Replace every uppercase letter with '_lowercase'
-        .replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
-        // Remove the leading underscore if the string started with an uppercase letter (PascalCase)
-        .replace(/^_/, ''); 
+  return str
+    .replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+    .replace(/^_/, ""); // Remove leading underscore for PascalCase input
 }

@@ -1,12 +1,63 @@
+/**
+ * freezed_model.ts
+ * ----------------
+ * Template that produces a complete Freezed model file from parsed field data.
+ *
+ * Output shape (based on the Flutter project convention):
+ *
+ *   import 'package:freezed_annotation/freezed_annotation.dart';
+ *   import '<relative_path_to_entity>';
+ *   // TODO: import nested models here
+ *
+ *   part 'account_model.freezed.dart';
+ *   part 'account_model.g.dart';
+ *
+ *   @freezed
+ *   abstract class AccountModel with _$AccountModel {
+ *     const AccountModel._();
+ *
+ *     @JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
+ *     const factory AccountModel({
+ *       @JsonKey(fromJson: ModelGeneratorHelper.generateUuidFromJson)
+ *       required String id,
+ *       @AccountTypeConverter() required AccountType type,
+ *       DateTime? createdAt,
+ *       ...
+ *     }) = _AccountModel;
+ *
+ *     factory AccountModel.fromJson(Map<String, dynamic> json) =>
+ *         _$AccountModelFromJson(json);
+ *   }
+ *
+ *   // MODEL -> ENTITY
+ *   // ENTITY -> MODEL
+ *   // List helpers
+ */
+
 import { FieldInfo } from "../utils/dart_parser";
 
+// ---------------------------------------------------------------------------
+// Special field names that receive @JsonKey helpers from ModelGeneratorHelper
+// ---------------------------------------------------------------------------
+
+const JSON_KEY_HELPERS: Record<string, string> = {
+  id: "ModelGeneratorHelper.generateUuidFromJson",
+  createdAt: "ModelGeneratorHelper.generateCreatedAtFromJson",
+  updatedAt: "ModelGeneratorHelper.generateUpdatedAtFromJson",
+};
+
+// ---------------------------------------------------------------------------
+// Public Function
+// ---------------------------------------------------------------------------
+
 /**
- * Generates the full content for the Freezed Model file.
- * * Features:
- * - Swaps Entity types for Model types in the factory definition.
- * - Adds @Default() annotation if a default value was found in the Entity.
- * - Adds @ConverterName() annotation if an Enum with a JsonConverter was detected.
- * - Generates recursive toEntity() and toModel() extensions for Lists and Maps.
+ * Generates the complete Dart source for a Freezed model file.
+ *
+ * @param modelClass   PascalCase model class name  (e.g. "AccountModel").
+ * @param entityClass  PascalCase entity class name (e.g. "AccountEntity").
+ * @param importPath   Relative import path from the model file to the entity file.
+ * @param fileName     The model .dart filename     (e.g. "account_model.dart").
+ * @param fields       Parsed field list from the entity.
  */
 export function generateFreezedModelContent(
   modelClass: string,
@@ -17,85 +68,9 @@ export function generateFreezedModelContent(
 ): string {
   const baseName = fileName.replace(".dart", "");
 
-  // 1. Generate Factory Parameters
-  const factoryParams = fields
-    .map((f) => {
-      let fieldType = f.type;
-
-      // SWAP ENTITY -> MODEL IN TYPE DEFINITION
-      // e.g. List<UserEntity> -> List<UserModel>
-      if (f.isEntity) {
-        fieldType = fieldType.replace(/Entity/g, "Model");
-      }
-
-      let prefix = "";
-
-      // NEW: Add Converter Annotation if detected (for Enums)
-      if (f.isEnum && f.converterName) {
-        prefix += `@${f.converterName}() `;
-      }
-
-      // HANDLE DEFAULTS
-      // If parsing found a default, add @Default(val)
-      // If default exists, the field is technically not "required" in Freezed syntax
-      if (f.defaultValue) {
-        prefix += `@Default(${f.defaultValue}) `;
-      } else if (!f.isNullable) {
-        prefix += "required ";
-      }
-
-      return `    ${prefix}${fieldType} ${f.name},`;
-    })
-    .join("\n");
-
-  // 2. Generate ToEntity Body
-  const toEntityFields = fields
-    .map((f) => {
-      // If it is an Entity type, we need to map it
-      if (f.isEntity) {
-        const nullSafe = f.isNullable ? "?" : "";
-
-        // CASE: List<Entity> -> List<Model>
-        if (f.isList) {
-          return `      ${f.name}: ${f.name}${nullSafe}.map((e) => e.toEntity()).toList(),`;
-        }
-        // CASE: Map<Key, Entity> -> Map<Key, Model>
-        else if (f.isMap) {
-          return `      ${f.name}: ${f.name}${nullSafe}.map((k, e) => MapEntry(k, e.toEntity())),`;
-        }
-        // CASE: Single Entity -> Single Model
-        else {
-          return `      ${f.name}: ${f.name}${nullSafe}.toEntity(),`;
-        }
-      }
-
-      // Primitive Types or simple Enums (pass through)
-      return `      ${f.name}: ${f.name},`;
-    })
-    .join("\n");
-
-  // 3. Generate ToModel Body
-  const toModelFields = fields
-    .map((f) => {
-      if (f.isEntity) {
-        const nullSafe = f.isNullable ? "?" : "";
-
-        // CASE: List<Entity>
-        if (f.isList) {
-          return `      ${f.name}: ${f.name}${nullSafe}.map((e) => e.toModel()).toList(),`;
-        }
-        // CASE: Map<Key, Entity>
-        else if (f.isMap) {
-          return `      ${f.name}: ${f.name}${nullSafe}.map((k, e) => MapEntry(k, e.toModel())),`;
-        }
-        // CASE: Single Entity
-        else {
-          return `      ${f.name}: ${f.name}${nullSafe}.toModel(),`;
-        }
-      }
-      return `      ${f.name}: ${f.name},`;
-    })
-    .join("\n");
+  const factoryParams  = buildFactoryParams(fields);
+  const toEntityBody   = buildToEntityBody(fields);
+  const toModelBody    = buildToModelBody(fields);
 
   return `import 'package:freezed_annotation/freezed_annotation.dart';
 import '${importPath}';
@@ -109,12 +84,13 @@ part '${baseName}.g.dart';
 abstract class ${modelClass} with _$${modelClass} {
   const ${modelClass}._();
 
-  @JsonSerializable(explicitToJson: true)
+  @JsonSerializable(explicitToJson: true, fieldRename: FieldRename.snake)
   const factory ${modelClass}({
 ${factoryParams}
   }) = _${modelClass};
 
-  factory ${modelClass}.fromJson(Map<String, dynamic> json) => _$${modelClass}FromJson(json);
+  factory ${modelClass}.fromJson(Map<String, dynamic> json) =>
+      _$${modelClass}FromJson(json);
 }
 
 // -----------------------------------------------------------------------------
@@ -123,7 +99,7 @@ ${factoryParams}
 extension ${modelClass}Mapper on ${modelClass} {
   ${entityClass} toEntity() {
     return ${entityClass}(
-${toEntityFields}
+${toEntityBody}
     );
   }
 }
@@ -134,13 +110,13 @@ ${toEntityFields}
 extension ${entityClass}Mapper on ${entityClass} {
   ${modelClass} toModel() {
     return ${modelClass}(
-${toModelFields}
+${toModelBody}
     );
   }
 }
 
 // -----------------------------------------------------------------------------
-// HELPER MAPPERS
+// HELPER LIST MAPPERS
 // -----------------------------------------------------------------------------
 extension ${modelClass}ListMapper on List<${modelClass}> {
   List<${entityClass}> toEntities() => map((e) => e.toEntity()).toList();
@@ -150,4 +126,100 @@ extension ${entityClass}ListMapper on List<${entityClass}> {
   List<${modelClass}> toModels() => map((e) => e.toModel()).toList();
 }
 `;
+}
+
+// ---------------------------------------------------------------------------
+// Private Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the indented factory constructor parameter list for the model.
+ *
+ * Rules applied per field:
+ *   1. Entity types are renamed to their Model counterparts.
+ *   2. Fields named "id", "createdAt", "updatedAt" get @JsonKey(fromJson: ...).
+ *   3. Enum fields with a known converter get @ConverterName().
+ *   4. Fields with a default value get @Default(value).
+ *   5. Non-nullable fields without a default get "required".
+ */
+function buildFactoryParams(fields: FieldInfo[]): string {
+  return fields
+    .map((f) => {
+      // Swap Entity → Model in the type string
+      const fieldType = f.isEntity ? f.type.replace(/Entity/g, "Model") : f.type;
+
+      const annotations: string[] = [];
+
+      // @JsonKey for well-known fields (id, createdAt, updatedAt)
+      if (JSON_KEY_HELPERS[f.name]) {
+        annotations.push(`@JsonKey(fromJson: ${JSON_KEY_HELPERS[f.name]})`);
+      }
+
+      // @ConverterName() for enum types that have a JsonConverter
+      if (f.isEnum && f.converterName) {
+        annotations.push(`@${f.converterName}()`);
+      }
+
+      // Build the prefix: @Default(...) OR required OR nothing (nullable)
+      let prefix = "";
+      if (f.defaultValue) {
+        annotations.push(`@Default(${f.defaultValue})`);
+      } else if (!f.isNullable) {
+        prefix = "required ";
+      }
+
+      // Render annotations on separate lines, indented
+      const annotationLines = annotations
+        .map((a) => `    ${a}`)
+        .join("\n");
+
+      const paramLine = `    ${prefix}${fieldType} ${f.name},`;
+
+      return annotationLines ? `${annotationLines}\n${paramLine}` : paramLine;
+    })
+    .join("\n");
+}
+
+/**
+ * Builds the toEntity() return statement body.
+ * Nested entity models are mapped recursively via .toEntity() calls.
+ */
+function buildToEntityBody(fields: FieldInfo[]): string {
+  return fields
+    .map((f) => {
+      if (f.isEntity) {
+        const safe = f.isNullable ? "?" : "";
+        if (f.isList) {
+          return `      ${f.name}: ${f.name}${safe}.map((e) => e.toEntity()).toList(),`;
+        }
+        if (f.isMap) {
+          return `      ${f.name}: ${f.name}${safe}.map((k, e) => MapEntry(k, e.toEntity())),`;
+        }
+        return `      ${f.name}: ${f.name}${safe}.toEntity(),`;
+      }
+      return `      ${f.name}: ${f.name},`;
+    })
+    .join("\n");
+}
+
+/**
+ * Builds the toModel() return statement body.
+ * Nested entity fields are mapped recursively via .toModel() calls.
+ */
+function buildToModelBody(fields: FieldInfo[]): string {
+  return fields
+    .map((f) => {
+      if (f.isEntity) {
+        const safe = f.isNullable ? "?" : "";
+        if (f.isList) {
+          return `      ${f.name}: ${f.name}${safe}.map((e) => e.toModel()).toList(),`;
+        }
+        if (f.isMap) {
+          return `      ${f.name}: ${f.name}${safe}.map((k, e) => MapEntry(k, e.toModel())),`;
+        }
+        return `      ${f.name}: ${f.name}${safe}.toModel(),`;
+      }
+      return `      ${f.name}: ${f.name},`;
+    })
+    .join("\n");
 }

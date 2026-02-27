@@ -1,28 +1,60 @@
+/**
+ * generate_entity_to_model.ts
+ * ----------------
+ * VSCode command: "flutter-genius.generateEntityToModel"
+ *
+ * What it does:
+ *   1. Finds the entity class under the cursor.
+ *   2. Validates it ends in "Entity".
+ *   3. Extracts all fields from the class body.
+ *   4. Runs enum detection on unknown types.
+ *   5. If the entity is a plain Dart class, rewrites it as a Freezed entity in-place.
+ *   6. Resolves the target model directory (domain/entities → data/models).
+ *   7. Generates the Freezed model file and opens it in the editor.
+ */
+
 import * as vscode from "vscode";
 import * as path from "path";
-import { getClassAtPosition, extractFields } from "../utils/dart_parser";
-import { getRelativeImportPath, writeFile } from "../utils/file_manager";
-import { generateFreezedModelContent } from "../templates/freezed_model";
-import { generateFreezedEntityContent } from "../templates/freezed_entity"; // Import new template
-import { toSnakeCase } from "../utils/string_utils";
-import { analyzeTypeForEnum } from "../utils/enum_detector";
 
-export async function generateEntityToModelCommand() {
+import { getClassAtPosition, extractFields, FieldInfo } from "../utils/dart_parser";
+import { analyzeTypeForEnum } from "../utils/enum_detector";
+import { getRelativeImportPath, writeFile } from "../utils/file_manager";
+import { toSnakeCase } from "../utils/string_utils";
+import { generateFreezedEntityContent } from "../templates/freezed_entity";
+import { generateFreezedModelContent } from "../templates/freezed_model";
+
+// ---------------------------------------------------------------------------
+// Known primitive / built-in Dart types — skip enum detection for these
+// ---------------------------------------------------------------------------
+const PRIMITIVE_TYPES = new Set([
+  "String", "int", "double", "bool", "DateTime",
+]);
+
+// ---------------------------------------------------------------------------
+// Command Entry Point
+// ---------------------------------------------------------------------------
+
+/**
+ * Main command handler. Registered as "flutter-genius.generateEntityToModel".
+ */
+export async function generateEntityToModelCommand(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
-  if (!editor) return;
+  if (!editor) {
+    return;
+  }
 
   const document = editor.document;
   const filePath = document.uri.fsPath;
   const entityDir = path.dirname(filePath);
 
-  // 1. Detect Class
+  // ------------------------------------------------------------------
+  // Step 1: Find the entity class at the cursor
+  // ------------------------------------------------------------------
   const cursorPosition = editor.selection.active;
   const classInfo = getClassAtPosition(document, cursorPosition);
 
   if (!classInfo) {
-    vscode.window.showErrorMessage(
-      "No class found at current cursor position.",
-    );
+    vscode.window.showErrorMessage("No class found at the current cursor position.");
     return;
   }
 
@@ -30,119 +62,161 @@ export async function generateEntityToModelCommand() {
 
   if (!className.endsWith("Entity")) {
     vscode.window.showErrorMessage(
-      `Selected class "${className}" must end in "Entity".`,
+      `"${className}" does not end in "Entity". Place your cursor inside an entity class.`
     );
     return;
   }
 
-  // 2. Extract Fields (Handles both Normal and Freezed via updated parser)
+  // ------------------------------------------------------------------
+  // Step 2: Extract fields
+  // ------------------------------------------------------------------
   let fields = extractFields(classBody, isFreezed);
 
   if (fields.length === 0) {
-    vscode.window.showErrorMessage(`No fields found in ${className}.`);
+    vscode.window.showErrorMessage(`No fields found in "${className}".`);
     return;
   }
 
-  // 3. ENUM DETECTION (Same as before)
+  // ------------------------------------------------------------------
+  // Step 3: Detect enums in field types
+  // ------------------------------------------------------------------
   const unannotatedEnums: string[] = [];
+
   fields = await Promise.all(
-    fields.map(async (field) => {
-      if (
-        !field.isList &&
-        !field.isMap &&
-        !field.isEntity &&
-        !["String", "int", "double", "bool", "DateTime"].includes(
-          field.cleanType,
-        )
-      ) {
-        const analysis = await analyzeTypeForEnum(field.cleanType);
-        if (analysis.isEnum) {
-          field.isEnum = true;
-          if (analysis.hasAnnotation && analysis.converterName) {
-            field.converterName = analysis.converterName;
-          } else {
-            unannotatedEnums.push(field.cleanType);
-          }
-        }
-      }
-      return field;
-    }),
+    fields.map((field) => enrichFieldWithEnumInfo(field, unannotatedEnums))
   );
 
-  // ---------------------------------------------------------
-  // 4. IF NORMAL CLASS -> CONVERT TO FREEZED ENTITY (IN PLACE)
-  // ---------------------------------------------------------
+  // ------------------------------------------------------------------
+  // Step 4 (optional): Convert plain entity → Freezed entity in-place
+  // ------------------------------------------------------------------
   if (!isFreezed) {
-    const fileName = path.basename(filePath);
-    const newEntityContent = generateFreezedEntityContent(
-      className,
-      fileName,
-      fields,
-    );
+    const entityFileName = path.basename(filePath);
+    const newEntityContent = generateFreezedEntityContent(className, entityFileName, fields);
 
-    // Write to the CURRENT file
     await writeFile(filePath, newEntityContent);
 
-    // Provide immediate feedback about the conversion
     vscode.window.showInformationMessage(
-      `Converted ${className} to Freezed Entity! (Run build_runner)`,
+      `Converted "${className}" to a Freezed entity. Run build_runner to regenerate parts.`
     );
   }
 
-  // ---------------------------------------------------------
-  // 5. PREPARE MODEL PATHS
-  // ---------------------------------------------------------
-  let modelDir = "";
-  if (entityDir.includes(path.join("domain", "entities"))) {
-    modelDir = entityDir.replace(
-      path.join("domain", "entities"),
-      path.join("data", "models"),
-    );
-  } else if (entityDir.includes("domain")) {
-    modelDir = entityDir.replace("domain", path.join("data", "models"));
-  } else {
-    modelDir = path.join(path.dirname(entityDir), "data", "models");
-  }
-
-  const snakeClassName = toSnakeCase(className);
-  let baseName = snakeClassName;
-  if (baseName.endsWith("_entity")) {
-    baseName = baseName.substring(0, baseName.length - "_entity".length);
-  }
+  // ------------------------------------------------------------------
+  // Step 5: Resolve model output directory and file path
+  // ------------------------------------------------------------------
+  const modelDir = resolveModelDirectory(entityDir);
+  const baseName = deriveBaseName(className);
   const modelFileName = `${baseName}_model.dart`;
-  const targetPath = path.join(modelDir, modelFileName);
+  const modelFilePath = path.join(modelDir, modelFileName);
 
-  // 6. GENERATE MODEL CONTENT
+  // ------------------------------------------------------------------
+  // Step 6: Generate model file content
+  // ------------------------------------------------------------------
   const modelClassName = className.replace("Entity", "Model");
-  const relativeImportPath = getRelativeImportPath(modelDir, filePath);
+  const entityImportPath = getRelativeImportPath(modelDir, filePath);
 
   const fileContent = generateFreezedModelContent(
     modelClassName,
     className,
-    relativeImportPath,
+    entityImportPath,
     modelFileName,
-    fields,
+    fields
   );
 
-  // 7. WRITE MODEL FILE
+  // ------------------------------------------------------------------
+  // Step 7: Write model file and open it
+  // ------------------------------------------------------------------
   try {
-    await writeFile(targetPath, fileContent);
+    await writeFile(modelFilePath, fileContent);
 
-    // Open the new Model file
-    const doc = await vscode.workspace.openTextDocument(targetPath);
+    const doc = await vscode.workspace.openTextDocument(modelFilePath);
     await vscode.window.showTextDocument(doc);
 
     if (unannotatedEnums.length > 0) {
-      const unique = [...new Set(unannotatedEnums)].join(", ");
-      vscode.window.showInformationMessage(
-        `Generated Model! ℹ️ Note: Enums [${unique}] lack JsonEnum annotations.`,
+      const uniqueEnums = [...new Set(unannotatedEnums)].join(", ");
+      vscode.window.showWarningMessage(
+        `Model generated. Note: [${uniqueEnums}] appear to be enums without a @JsonEnum / JsonConverter — add them manually.`
       );
     } else {
-      vscode.window.showInformationMessage(
-        `Generated Freezed model: ${modelClassName}`,
-      );
+      vscode.window.showInformationMessage(`Generated "${modelClassName}" successfully.`);
     }
   } catch (error: any) {
-    vscode.window.showErrorMessage(`Failed to generate: ${error.message}`);
+    vscode.window.showErrorMessage(`Failed to write model file: ${error.message}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Private Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs enum detection on a field and mutates it with isEnum / converterName.
+ * Also pushes to `unannotatedEnums` when an enum has no ready-to-use converter.
+ */
+async function enrichFieldWithEnumInfo(
+  field: FieldInfo,
+  unannotatedEnums: string[]
+): Promise<FieldInfo> {
+  // Only analyse types that could be enums (not primitives, lists, maps, entities)
+  if (
+    field.isList ||
+    field.isMap ||
+    field.isEntity ||
+    PRIMITIVE_TYPES.has(field.cleanType)
+  ) {
+    return field;
+  }
+
+  const analysis = await analyzeTypeForEnum(field.cleanType);
+
+  if (!analysis.isEnum) {
+    return field;
+  }
+
+  field.isEnum = true;
+
+  if (analysis.hasConverter && analysis.converterName) {
+    field.converterName = analysis.converterName;
+  } else {
+    unannotatedEnums.push(field.cleanType);
+  }
+
+  return field;
+}
+
+/**
+ * Resolves the target model directory given the entity's directory.
+ *
+ * Mapping rules (in priority order):
+ *   .../domain/entities → .../data/models
+ *   .../domain/...      → .../data/models
+ *   anything else       → sibling "data/models" directory
+ */
+function resolveModelDirectory(entityDir: string): string {
+  const domainEntitiesSegment = path.join("domain", "entities");
+  const domainSegment = "domain";
+
+  if (entityDir.includes(domainEntitiesSegment)) {
+    return entityDir.replace(domainEntitiesSegment, path.join("data", "models"));
+  }
+
+  if (entityDir.includes(domainSegment)) {
+    return entityDir.replace(domainSegment, path.join("data", "models"));
+  }
+
+  // Fallback: put the model next to a "data/models" sibling folder
+  return path.join(path.dirname(entityDir), "data", "models");
+}
+
+/**
+ * Derives the snake_case base name for the model file from the entity class name.
+ *
+ * Example:
+ *   "AccountEntity" → "account"     → model file: "account_model.dart"
+ */
+function deriveBaseName(className: string): string {
+  let baseName = toSnakeCase(className);
+  if (baseName.endsWith("_entity")) {
+    baseName = baseName.slice(0, -"_entity".length);
+  }
+  return baseName;
 }

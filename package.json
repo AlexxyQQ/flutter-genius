@@ -48,90 +48,17 @@
   "contributes": {
     "commands": [
       {
-        "command": "flutter-genius.extractLocalization",
-        "title": "Flutter Genius: Extract AppText to Localization"
-      },
-      {
-        "command": "flutter-genius.generateMapper",
-        "title": "Flutter Genius: Generate Entity to Model"
-      },
-      {
-        "command": "flutter-genius.extractLocalizationAggressive",
-        "title": "Flutter Genius: Extract Localization (Aggressive - Select Folder)"
-      },
-      {
-        "command": "flutter-genius.createBloc",
-        "title": "Flutter Genius: Create BLoC (Freezed)"
-      },
-      {
-        "command": "flutter-genius.addSizeExtension",
-        "title": "Flutter Genius: Add Size Extension & Refactor UI"
-      },
-      {
-        "command": "flutter-genius.convertEnum",
-        "title": "Flutter Genius: convert to JsonEnum"
-      },
-      {
-        "command": "flutter-genius.extractClasses",
-        "title": "Flutter Genius: Extract Classes to Files"
-      },
-      {
-        "command": "flutter-genius.fixMovedLocalizedFiles",
-        "title": "Flutter Genius: Fix Moved Localized Files"
-      },
-      {
-        "command": "flutter-genius.intoHardcodedString",
-        "title": "Flutter Genius: Revert Localization Changes"
+        "command": "flutter-genius.generateEntityToModel",
+        "title": "Flutter Genius: Generate Model from Entity"
       }
     ],
     "menus": {
-      "explorer/context": [
-        {
-          "command": "flutter-genius.createBloc",
-          "when": "explorerResourceIsFolder",
-          "group": "navigation"
-        },
-        {
-          "command": "flutter-genius.extractLocalizationAggressive",
-          "when": "explorerResourceIsFolder",
-          "group": "modification"
-        }
-      ],
+      "explorer/context": [],
       "editor/context": [
         {
-          "command": "flutter-genius.generateMapper",
-          "group": "1_modification",
-          "when": "editorLangId == dart"
-        },
-        {
-          "command": "flutter-genius.extractClasses",
-          "group": "1_modification",
-          "when": "editorLangId == dart"
-        },
-        {
-          "command": "flutter-genius.convertEnum",
-          "group": "1_modification",
-          "when": "editorLangId == dart"
-        },
-        {
-          "command": "flutter-genius.extractLocalization",
-          "group": "1_modification",
-          "when": "editorLangId == dart"
-        },
-        {
-          "command": "flutter-genius.addSizeExtension",
-          "group": "1_modification",
-          "when": "editorLangId == dart"
-        },
-        {
-          "command": "flutter-genius.createBloc",
-          "group": "1_modification",
-          "when": "editorLangId == dart"
-        },
-        {
-          "command": "flutter-genius.extractLocalizationAggressive",
-          "group": "1_modification",
-          "when": "editorLangId == dart"
+          "command": "flutter-genius.generateEntityToModel",
+          "when": "editorLangId == dart",
+          "group": "flutter-genius@1"
         }
       ]
     }

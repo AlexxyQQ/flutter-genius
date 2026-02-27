@@ -1,76 +1,48 @@
+/**
+ * file_manager.ts
+ * ----------------
+ * Utilities for reading, writing, and resolving file paths within the extension.
+ * All file I/O goes through here so it's easy to swap implementations later.
+ */
+
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 
 /**
- * writes content to a file. Creates directories if they don't exist.
+ * Writes UTF-8 content to the given absolute file path.
+ * Creates any missing parent directories automatically.
  */
-export async function writeFile(fsPath: string, content: string) {
-  const uri = vscode.Uri.file(fsPath);
+export async function writeFile(
+  fsPath: string,
+  content: string,
+): Promise<void> {
   const dir = path.dirname(fsPath);
 
-  // Recursive directory creation
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  const data = Buffer.from(content, "utf8");
+  const uri = vscode.Uri.file(fsPath);
+  const data = new TextEncoder().encode(content);
   await vscode.workspace.fs.writeFile(uri, data);
 }
 
 /**
- * Calculates the Dart import path from one file to another.
- * Ensures usage of forward slashes and local identifiers (./).
+ * Returns the relative Dart import path from a directory to a target file.
+ *
+ * Example:
+ *   fromDir  = /project/lib/features/account/data/models
+ *   toFile   = /project/lib/features/account/domain/entities/account_entity.dart
+ *   result   = ../../domain/entities/account_entity.dart
+ *
+ * Always uses forward slashes so the result is valid on all platforms.
  */
 export function getRelativeImportPath(fromDir: string, toFile: string): string {
   let rel = path.relative(fromDir, toFile);
-
-  // Force forward slashes for Dart imports (even on Windows)
-  rel = rel.split(path.sep).join("/");
-
+  rel = rel.split(path.sep).join("/"); // Normalize to forward slashes
   if (!rel.startsWith(".")) {
     rel = "./" + rel;
   }
   return rel;
-}
-
-/**
- * NEW: specific helper to recalculate imports when moving from Entity -> Model.
- * * @param originalImport The import string (e.g. "import '../enums/test_enum.dart';")
- * @param fromDir The directory of the original file (Entity folder)
- * @param toDir The directory of the new file (Model folder)
- */
-export function fixRelativeImport(
-  originalImport: string,
-  fromDir: string,
-  toDir: string
-): string {
-  // 1. Extract the path inside the quotes
-  const match = originalImport.match(/['"](.+)['"]/);
-  if (!match) return originalImport; // Return as is if parse fails
-
-  const oldPath = match[1];
-
-  // 2. If it's a package: or dart: import, return as is
-  if (oldPath.startsWith("package:") || oldPath.startsWith("dart:")) {
-    return originalImport;
-  }
-
-  // 3. Resolve the absolute path of the target file
-  // path.resolve combines the current directory with the relative path to get absolute
-  const absoluteTarget = path.resolve(fromDir, oldPath);
-
-  // 4. Calculate the new relative path from the generated Model directory
-  let newRelativePath = path.relative(toDir, absoluteTarget);
-
-  // 5. Fix slashes for Dart (Windows uses backslashes by default in path module)
-  newRelativePath = newRelativePath.split(path.sep).join("/");
-
-  // 6. Ensure it starts with ./ or ../
-  if (!newRelativePath.startsWith(".")) {
-    newRelativePath = "./" + newRelativePath;
-  }
-
-  // 7. Reconstruct the import string
-  return `import '${newRelativePath}';`;
 }

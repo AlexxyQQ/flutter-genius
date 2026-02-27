@@ -1,110 +1,105 @@
+/**
+ * enum_detector.ts
+ * ----------------
+ * Detects whether a Dart type name refers to an enum, and whether that enum
+ * has a ready-to-use JsonConverter class.
+ *
+ * Detection strategy:
+ *   1. Ignore known primitive / built-in types.
+ *   2. Search the workspace for a file named after the type (snake_case).
+ *   3. Read the file and confirm "enum TypeName" exists.
+ *   4. Check for @JsonEnum annotation and a JsonConverter<TypeName, ...> class.
+ */
+
 import * as vscode from "vscode";
-import { toSnakeCase } from "./string_utils"; // Ensure you have this exported
+import { toSnakeCase } from "./string_utils";
+
+// ---------------------------------------------------------------------------
+// Interface
+// ---------------------------------------------------------------------------
 
 export interface EnumAnalysis {
+  /** True when the type is confirmed (or suspected) to be a Dart enum. */
   isEnum: boolean;
-  hasAnnotation: boolean;
+  /**
+   * True when both @JsonEnum and a JsonConverter class were found.
+   * Only meaningful when isEnum is true.
+   */
+  hasConverter: boolean;
+  /** The name of the JsonConverter class, if found. */
   converterName: string | null;
-  foundFile: boolean;
 }
 
-/**
- * Analyzes a type name to see if it is an Enum and if it is ready for JSON serialization.
- */
-export async function analyzeTypeForEnum(
-  typeName: string
-): Promise<EnumAnalysis> {
-  // 1. Filter out non-candidates immediately
-  const ignoredTypes = [
-    "String",
-    "int",
-    "double",
-    "bool",
-    "num",
-    "dynamic",
-    "Object",
-    "DateTime",
-    "void",
-    "List",
-    "Map",
-    "Set",
-  ];
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
+/** Types that are never enums — skip workspace search for these. */
+const PRIMITIVE_TYPES = new Set([
+  "String", "int", "double", "bool", "num",
+  "dynamic", "Object", "DateTime", "void",
+  "List", "Map", "Set",
+]);
+
+// ---------------------------------------------------------------------------
+// Public Function
+// ---------------------------------------------------------------------------
+
+/**
+ * Analyzes `typeName` to determine if it is a Dart enum.
+ *
+ * Returns quickly for primitive types and entity/model types.
+ * For unknown types it searches the workspace for a matching .dart file.
+ */
+export async function analyzeTypeForEnum(typeName: string): Promise<EnumAnalysis> {
+  const NOT_ENUM: EnumAnalysis = { isEnum: false, hasConverter: false, converterName: null };
+
+  // Fast-path: skip primitives and domain objects
   if (
-    ignoredTypes.includes(typeName) ||
+    PRIMITIVE_TYPES.has(typeName) ||
     typeName.endsWith("Entity") ||
     typeName.endsWith("Model")
   ) {
-    return {
-      isEnum: false,
-      hasAnnotation: false,
-      converterName: null,
-      foundFile: false,
-    };
+    return NOT_ENUM;
   }
 
-  // 2. Try to locate the file defining this type.
-  // Heuristic: Flutter standard is PascalCaseType -> snake_case_file.dart
+  // Search workspace for "<snake_type>.dart"
   const snakeName = toSnakeCase(typeName);
-
-  // Limit search to 1 result for speed
-  const files = await vscode.workspace.findFiles(
-    `**/${snakeName}.dart`,
-    "**/.*",
-    1
-  );
+  const files = await vscode.workspace.findFiles(`**/${snakeName}.dart`, "**/.*", 1);
 
   if (files.length === 0) {
-    // We suspect it's an enum (not primitive/entity), but couldn't find the file.
-    return {
-      isEnum: true,
-      hasAnnotation: false,
-      converterName: null,
-      foundFile: false,
-    };
+    // File not found — we still suspect this might be an enum based on naming
+    return { isEnum: true, hasConverter: false, converterName: null };
   }
 
-  // 3. Read file content
+  // Read and analyse the file
   try {
     const doc = await vscode.workspace.openTextDocument(files[0]);
     const content = doc.getText();
 
-    // Verify it is actually an enum
-    const isEnum = content.includes(`enum ${typeName}`);
-    if (!isEnum) {
-      return {
-        isEnum: false,
-        hasAnnotation: false,
-        converterName: null,
-        foundFile: true,
-      };
+    // Confirm it actually declares this enum
+    if (!content.includes(`enum ${typeName}`)) {
+      return NOT_ENUM;
     }
 
-    // Check for @JsonEnum annotation
+    // Look for @JsonEnum annotation
     const hasJsonEnum = content.includes("@JsonEnum");
 
-    // Check for a converter class definition in the same file
-    // Regex looks for: class SomeConverter implements JsonConverter<ThisEnum, ...>
+    // Look for: class SomeConverter implements JsonConverter<TypeName, ...>
     const converterRegex = new RegExp(
-      `class\\s+(\\w+)[^\\{]*implements\\s+.*JsonConverter\\s*<\\s*${typeName}`,
-      "s"
+      `class\\s+(\\w+)[^{]*implements[^{]*JsonConverter\\s*<\\s*${typeName}`,
+      "s" // dotAll flag so "." matches newlines
     );
-    const match = content.match(converterRegex);
-
-    const converterName = match ? match[1] : null;
+    const converterMatch = content.match(converterRegex);
+    const converterName = converterMatch ? converterMatch[1] : null;
 
     return {
       isEnum: true,
-      hasAnnotation: hasJsonEnum && !!converterName,
-      converterName: converterName,
-      foundFile: true,
+      hasConverter: hasJsonEnum && converterName !== null,
+      converterName,
     };
-  } catch (e) {
-    return {
-      isEnum: true,
-      hasAnnotation: false,
-      converterName: null,
-      foundFile: false,
-    };
+  } catch {
+    // If we can't read the file, assume it's an enum without a converter
+    return { isEnum: true, hasConverter: false, converterName: null };
   }
 }
