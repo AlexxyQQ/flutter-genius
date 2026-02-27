@@ -171,6 +171,14 @@ export function getClassAtPosition(
 export function getAllDeclarations(text: string): DeclarationInfo[] {
   const declarations: DeclarationInfo[] = [];
 
+  // Strip single-line comments before running the declaration regex.
+  // This prevents false matches like "// Deeply nested custom class\nfinal Foo bar;"
+  // where the regex would match `class` from the comment, then `\s+` spanning the
+  // newline, then capture "final" as the class name.
+  // We replace with same-length spaces so all char positions remain valid — the
+  // original `text` is still used for body extraction below.
+  const searchText = text.replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
+
   // Captures: optional annotations, optional "abstract", the keyword, and the name.
   // Using a non-capturing prefix for annotations so match[1]=keyword, match[2]=name.
   // match.index points to the start of the first annotation (or the keyword itself).
@@ -179,7 +187,7 @@ export function getAllDeclarations(text: string): DeclarationInfo[] {
 
   let match: RegExpExecArray | null;
 
-  while ((match = declRegex.exec(text)) !== null) {
+  while ((match = declRegex.exec(searchText)) !== null) {
     const type = match[1] as "class" | "enum" | "mixin";
     const name = match[2];
 
@@ -190,8 +198,10 @@ export function getAllDeclarations(text: string): DeclarationInfo[] {
     // Find the first "{" that opens this declaration's block.
     // Start searching after the full match text (past the class name) so we skip
     // any "{" inside annotation arguments like @JsonEnum({...}).
+    // Use searchText (comments stripped) so comment content like "// {" doesn't
+    // affect brace finding.
     const afterMatchIndex = match.index + match[0].length;
-    const openBraceIndex = text.indexOf("{", afterMatchIndex);
+    const openBraceIndex = searchText.indexOf("{", afterMatchIndex);
     if (openBraceIndex === -1) {
       continue;
     }
@@ -200,10 +210,10 @@ export function getAllDeclarations(text: string): DeclarationInfo[] {
     let openBraces = 1;
     let endIndex = -1;
 
-    for (let i = openBraceIndex + 1; i < text.length; i++) {
-      if (text[i] === "{") {
+    for (let i = openBraceIndex + 1; i < searchText.length; i++) {
+      if (searchText[i] === "{") {
         openBraces++;
-      } else if (text[i] === "}") {
+      } else if (searchText[i] === "}") {
         openBraces--;
       }
       if (openBraces === 0) {
@@ -216,6 +226,7 @@ export function getAllDeclarations(text: string): DeclarationInfo[] {
       continue;
     }
 
+    // Extract body from original text (preserves comments and formatting).
     const body = text.substring(startIndex, endIndex);
 
     // A class is Freezed if it uses the _$ClassName mixin pattern or has @freezed

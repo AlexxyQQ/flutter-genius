@@ -16,17 +16,15 @@
  *   2. A QuickPick lists every declaration in the file.
  *      - Pick one → that declaration stays in the original file; everything
  *        else is extracted to its own file.
- *      - Pick "Extract all" → every declaration is moved to its own file;
- *        the original becomes a barrel that re-exports the in-directory files.
+ *      - Pick "Extract all" → the primary class (auto-detected from the file
+ *        name) stays in the original file; everything else is extracted.
  *   3. Done — newly created files appear in the explorer.
  */
 
 import * as vscode from "vscode";
+import * as path from "path";
 import { getAllDeclarations, DeclarationInfo } from "../utils/dart_parser";
-import {
-  separateDeclarations,
-  separateAllToBarrel,
-} from "../utils/entity_separator";
+import { separateDeclarations } from "../utils/entity_separator";
 
 // ---------------------------------------------------------------------------
 // Type icons used in the QuickPick for readability
@@ -69,50 +67,107 @@ export async function separateClassesCommand(): Promise<void> {
     return;
   }
 
-  // ── Step 2: Build QuickPick options ───────────────────────────────────────
-  // One option per declaration (keep that one in the original file)
-  // plus an "Extract all" option at the bottom.
+  // ── Step 2: Auto-detect the "primary" class for the "Extract all" option ──
+  // The primary is the class whose name corresponds to this file. We try
+  // three strategies in order:
+  //   1. Class name matches the file name (snake_case → PascalCase).
+  //      e.g. test_entity.dart → TestEntity
+  //   2. First entity-named class (ends with "Entity").
+  //   3. First class declaration in the file.
+  const autoDetectedPrimary = detectPrimaryClass(declarations, filePath);
+
+  // ── Step 3: Build QuickPick options ────────────────────────────────────────
+  // One option per declaration (keep that one, extract the rest) plus an
+  // "Extract all others" shortcut that uses the auto-detected primary.
   const declarationOptions = declarations.map((decl) => ({
     label: `${TYPE_ICON[decl.type]}  ${decl.name}`,
     description: `Keep this ${decl.type} in the original file — extract the rest`,
     value: decl.name,
   }));
 
-  const extractAllOption = {
-    label: "$(files)  Extract all into separate files",
-    description: "Original file becomes a barrel that re-exports everything",
-    value: "__EXTRACT_ALL__",
-  };
+  const extractAllOption = autoDetectedPrimary
+    ? {
+        label: "$(files)  Extract all into separate files",
+        description: `"${autoDetectedPrimary}" stays in this file — all other declarations are extracted`,
+        value: "__EXTRACT_ALL__",
+      }
+    : null;
 
-  const choice = await vscode.window.showQuickPick(
-    [...declarationOptions, extractAllOption],
-    {
-      title: "Flutter Genius: Class Separator",
-      placeHolder: `Found ${declarations.length} declarations. Which one should stay in this file?`,
-      ignoreFocusOut: true,
-    }
-  );
+  const items = extractAllOption
+    ? [...declarationOptions, extractAllOption]
+    : declarationOptions;
+
+  const choice = await vscode.window.showQuickPick(items, {
+    title: "Flutter Genius: Class Separator",
+    placeHolder: `Found ${declarations.length} declarations. Which one should stay in this file?`,
+    ignoreFocusOut: true,
+  });
 
   if (!choice) {
     return; // User dismissed
   }
 
-  // ── Step 3: Run the appropriate separation ─────────────────────────────────
+  // ── Step 4: Run the separation ─────────────────────────────────────────────
+  // "Extract all" resolves to separateDeclarations with the auto-detected
+  // primary — the original file is NOT cleared and NOT turned into a barrel.
+  const primaryName =
+    choice.value === "__EXTRACT_ALL__" ? autoDetectedPrimary! : choice.value;
+
   try {
-    if (choice.value === "__EXTRACT_ALL__") {
-      await separateAllToBarrel(document, declarations, filePath);
-      vscode.window.showInformationMessage(
-        `Extracted all ${declarations.length} declarations. Original file is now a barrel.`
-      );
-    } else {
-      const primaryName = choice.value;
-      await separateDeclarations(document, declarations, primaryName, filePath);
-      const extractedCount = declarations.length - 1;
-      vscode.window.showInformationMessage(
-        `"${primaryName}" kept in place. Extracted ${extractedCount} declaration(s) to separate files.`
-      );
-    }
+    await separateDeclarations(document, declarations, primaryName, filePath);
+    const extractedCount = declarations.length - 1;
+    vscode.window.showInformationMessage(
+      `"${primaryName}" kept in place. Extracted ${extractedCount} declaration(s) to separate files.`
+    );
   } catch (error: any) {
     vscode.window.showErrorMessage(`Class Separator failed: ${error.message}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Auto-detects which class should stay in the original file when the user
+ * picks "Extract all". Tries three strategies in order:
+ *
+ *   1. Class name matches the file's base name converted to PascalCase
+ *      (e.g. test_entity.dart → TestEntity).
+ *   2. First entity-named class (ends with "Entity").
+ *   3. First class declaration in the file.
+ *
+ * Returns null only when the file contains no class declarations at all.
+ */
+function detectPrimaryClass(
+  declarations: DeclarationInfo[],
+  filePath: string
+): string | null {
+  const fileName = path.basename(filePath, ".dart"); // e.g. "test_entity"
+
+  // Convert snake_case file name → PascalCase expected class name
+  const expectedName = fileName
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(""); // "test_entity" → "TestEntity"
+
+  // Strategy 1: exact name match
+  const byName = declarations.find(
+    (d) => d.type === "class" && d.name === expectedName
+  );
+  if (byName) {
+    return byName.name;
+  }
+
+  // Strategy 2: first entity-named class
+  const firstEntity = declarations.find(
+    (d) => d.type === "class" && d.name.endsWith("Entity")
+  );
+  if (firstEntity) {
+    return firstEntity.name;
+  }
+
+  // Strategy 3: first class
+  const firstClass = declarations.find((d) => d.type === "class");
+  return firstClass?.name ?? null;
 }

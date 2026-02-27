@@ -9,6 +9,7 @@ A productivity extension for Flutter developers using **Clean Architecture** and
 | Feature | Description |
 |---|---|
 | **Entity → Model** | Generate a full Freezed model from any entity class — with JSON serialization and bidirectional mappers |
+| **Class Separator** | Split a multi-declaration Dart file into individual files with one click — enums, classes, and mixins each get their own file |
 | **BLoC Generator** | Scaffold a complete BLoC feature (Bloc, Event, State) via the right-click menu |
 | **Localization (AppText)** | Extract strings wrapped in `AppText(...)` to your JSON translation file |
 | **Aggressive Localization** | Scan a folder and extract all hardcoded strings to `easy_localization` keys |
@@ -63,6 +64,10 @@ Converts a Clean Architecture entity class into a complete Freezed data model wi
 - `List<Model>.toEntities()` and `List<Entity>.toModels()` helper extensions.
 
 > **Bonus:** If your entity is a plain Dart class (not yet Freezed), it is automatically converted to a Freezed entity in-place before the model is generated.
+
+**Multi-class files:** If your entity file contains multiple classes or enums, the command asks whether you want to separate them first:
+- **Yes** → separates all declarations into individual files, then generates the model for the primary entity.
+- **No** → generates a single combined model file covering all classes in the file. Plain helper classes (e.g. `Address`) are automatically mapped to their model counterparts (`AddressModel`).
 
 ---
 
@@ -209,7 +214,138 @@ dart run build_runner build --delete-conflicting-outputs
 
 ---
 
-### 2. BLoC Generator (Freezed)
+### 2. Class Separator
+
+Splits any Dart file containing multiple top-level declarations (classes, enums, mixins) into individual files.
+
+**How to use:**
+
+1. Open any Dart file with multiple declarations.
+2. Run the command via:
+   - Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) → **Flutter Genius: Class Separator**
+   - Right-click inside the editor → **Flutter Genius: Class Separator**
+3. A QuickPick lists every declaration in the file. Pick one of:
+   - A specific declaration → that one stays in the original file; all others are extracted.
+   - **"Extract all into separate files"** → the primary class (auto-detected from the file name) stays in the original file; everything else is extracted.
+
+**Routing rules:**
+
+| Declaration | Destination |
+|---|---|
+| Enum | `lib/config/constants/enums/app_specifics/<snake_name>.dart` |
+| Class / Mixin | Same directory as the original file, `<snake_name>.dart` |
+
+**Auto-rename (entity files only):** When extracting from a file that already contains Entity-named classes, any plain helper class without an `Entity` suffix is automatically renamed on extraction:
+- `class Address` → `class AddressEntity` in `address_entity.dart`
+- All type references in every rewritten file are updated to match.
+
+---
+
+#### Test Class — Class Separator Example
+
+Use the file below to test the separator end-to-end. It covers enums, nested entity classes, plain helper classes, complex default values, and nullable types.
+
+```dart
+enum AccountStatus { active, inactive, suspended, pending }
+
+enum Role { admin, moderator, user, guest }
+
+class TestEntity {
+  final String id;
+  final int age;
+  final List<String> friends;
+  final List<String>? defaultFriends;
+  final Map<String, dynamic>? defaultGroup;
+  final List<Map<String, dynamic>>? defaultListedGroup;
+  final AccountStatus status;
+  final AccountStatus defaultStatus;
+  final SubEntity mainSubEntity;
+  final SubEntity? optionalSubEntity;
+  final Address primaryAddress;
+  final Address? secondaryAddress;
+  final ProfileSettingsEntity settings;
+  final List<Address> pastAddresses;
+
+  const TestEntity({
+    required this.id,
+    required this.age,
+    required this.friends,
+    this.defaultFriends = const ['a', 'b', 'c'],
+    this.defaultGroup = const {'a': 1, 'b': 2, 'c': 3},
+    this.defaultListedGroup = const [
+      {'a': 1, 'b': 2, 'c': 3},
+      {'d': 4, 'e': 5, 'f': 6},
+    ],
+    required this.status,
+    this.defaultStatus = AccountStatus.pending,
+    required this.mainSubEntity,
+    this.optionalSubEntity,
+    required this.primaryAddress,
+    this.secondaryAddress,
+    required this.settings,
+    this.pastAddresses = const [],
+  });
+}
+
+class SubEntity {
+  final String subId;
+  final bool isActive;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+
+  const SubEntity({
+    required this.subId,
+    required this.isActive,
+    required this.createdAt,
+    this.updatedAt,
+  });
+}
+
+class ProfileSettingsEntity {
+  final Role userRole;
+  final bool emailNotificationsEnabled;
+  // Deeply nested custom class
+  final Address? billingAddress;
+
+  const ProfileSettingsEntity({
+    required this.userRole,
+    this.emailNotificationsEnabled = true,
+    this.billingAddress,
+  });
+}
+
+class Address {
+  final String street;
+  final String city;
+  final double latitude;
+  final double longitude;
+  final bool isVerified;
+
+  const Address({
+    required this.street,
+    required this.city,
+    required this.latitude,
+    required this.longitude,
+    this.isVerified = false,
+  });
+}
+```
+
+**Expected result when "Extract all" is chosen on `test_entity.dart`:**
+
+| File | Contains |
+|---|---|
+| `test_entity.dart` | `TestEntity` (kept, imports updated) |
+| `sub_entity.dart` | `SubEntity` |
+| `profile_settings_entity.dart` | `ProfileSettingsEntity` |
+| `address_entity.dart` | `AddressEntity` (renamed from `Address`) |
+| `lib/config/constants/enums/app_specifics/account_status.dart` | `enum AccountStatus` |
+| `lib/config/constants/enums/app_specifics/role.dart` | `enum Role` |
+
+---
+
+### 3. BLoC Generator (Freezed)
+
 
 Scaffold a complete BLoC feature folder via the explorer right-click menu.
 
@@ -227,7 +363,7 @@ login_bloc/
 
 ---
 
-### 3. Localization Extractor (AppText)
+### 4. Localization Extractor (AppText)
 
 Extract strings from a custom `AppText` widget into your JSON translation file.
 
@@ -241,7 +377,7 @@ Extract strings from a custom `AppText` widget into your JSON translation file.
 
 ---
 
-### 4. Aggressive Localization (Folder Scan)
+### 5. Aggressive Localization (Folder Scan)
 
 Extract **all** hardcoded strings in a folder.
 
@@ -254,7 +390,7 @@ Extract **all** hardcoded strings in a folder.
 
 ---
 
-### 5. Size Extension & Refactor
+### 6. Size Extension & Refactor
 
 Inject a responsive sizing extension and refactor verbose widget code to fluent syntax.
 
